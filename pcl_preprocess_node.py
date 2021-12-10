@@ -54,7 +54,7 @@ class PCL_Processing:
         x = self.transformed_vector(x)
         
         if -0.78 < x[0] < -0.41 :
-            if -0.12 < x[1] < 0.138:
+            if -0.12 < x[1] < 0.158:
                 return True
         
         return False

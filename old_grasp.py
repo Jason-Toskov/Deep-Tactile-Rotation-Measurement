@@ -3,18 +3,15 @@ import rospy
 import sys
 from agile_grasp2.msg import GraspListMsg
 from geometry_msgs.msg import PoseStamped, WrenchStamped, PoseArray
-from std_msgs.msg import Header
 import numpy as np
 import tf
 from tf import TransformListener
 import copy 
 from time import sleep
-import roslaunch
 
 import moveit_commander
 import moveit_msgs.msg
-from moveit_msgs.msg import DisplayTrajectory, MoveGroupActionFeedback, RobotState
-from sensor_msgs.msg import JointState
+from moveit_msgs.msg import DisplayTrajectory, MoveGroupActionFeedback
 from actionlib_msgs.msg import GoalStatusArray
 from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as outputMsg, _Robotiq2FGripper_robot_input as inputMsg
 from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg
@@ -31,25 +28,12 @@ class State(Enum):
     SECOND_GRAB=2
     FINISHED=3
 
-class AgileState(Enum):
-    RESET = 0
-    WAIT_FOR_ONE = 1
-    READY = 2
-
-AGILE_STATE_TRANSITION = {
-    AgileState.RESET: AgileState.WAIT_FOR_ONE,
-    AgileState.WAIT_FOR_ONE: AgileState.READY,
-    AgileState.READY: AgileState.READY
-}
-
 class GraspExecutor:
 
     def __init__(self):
         rospy.init_node('grasp_executor', anonymous=True)
 
         self.tf_listener_ = TransformListener()
-        self.launcher = roslaunch.scriptapi.ROSLaunch()
-        self.launcher.start()
 
         self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',
                                                moveit_msgs.msg.DisplayTrajectory,
@@ -63,37 +47,55 @@ class GraspExecutor:
 
         self.pose_publisher = rospy.Publisher("/pose_viz", PoseArray, queue_size=1)
 
-        self.box_drop = self.get_drop_pose()
+        self.box_drop = PoseStamped()
 
         self.state = State.FIRST_GRAB
+
+        self.box_drop.pose.position.x = -0.450
+        self.box_drop.pose.position.y = -0.400
+        self.box_drop.pose.position.z = 0.487
+
 
         self.gripper_data = 0
         self.gripper_sub = rospy.Subscriber('/Robotiq2FGripperRobotInput', inputMsg.Robotiq2FGripper_robot_input, self.gripper_state_callback)
         self.gripper_pub = rospy.Publisher('/Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
+        while not self.gripper_data and not rospy.is_shutdown():
+            rospy.loginfo("Waiting for gripper to connect")
+            rospy.sleep(1)
+        
+        self.command_gripper(reset_gripper_msg())
+        rospy.sleep(.1)
+        self.command_gripper(activate_gripper_msg())
+        rospy.sleep(.1)
+        self.command_gripper(close_gripper_msg())
+        rospy.sleep(.1)
+        self.command_gripper(open_gripper_msg())
+        rospy.sleep(.1)
+        rospy.loginfo("Gripper active")
 
+        #self.view_home_joints = [  0.033449843525886536, -0.8751748243915003, -1.466853443776266, -2.2844446341144007, 1.5841718912124634, -0.09186345735658819]
         self.view_home_joints = [0.24985386431217194, -0.702608887349264, -2.0076406637774866, -1.7586587111102503, 1.5221580266952515, 0.25777095556259155]
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
         self.drop_object_joints = [0.14647944271564484, -1.8239172140704554, -1.0428651014911097, -1.8701766172992151, 1.6055123805999756, 0.03247687593102455]
         self.deliver_object_joints = [-0.5880172888385218, -2.375404659901754, -0.8875716368304651, -1.437070671712057, 1.6041597127914429, 0.032297488301992416]
 
-        self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
 
-        self.agile_data = 0
-        self.agile_state = AgileState.WAIT_FOR_ONE
+        # Go to move home position using joint
+        self.move_to_joint_position(self.move_home_joints)
+        rospy.sleep(0.1)
+        rospy.loginfo("Moved to Home Position")
+        self.move_to_joint_position(self.view_home_joints)
+        rospy.sleep(0.)
+        rospy.loginfo("Moved to View Position")
 
-        rospy.Subscriber("/detect_grasps/grasps", GraspListMsg, self.agile_callback)
-
-    def agile_callback(self, data):
-        self.agile_data = data
-
-        self.agile_state = AGILE_STATE_TRANSITION[self.agile_state]
+        rospy.Subscriber("/detect_grasps/grasps", GraspListMsg, self.callback)
 
 
-    def find_best_grasp(self, data):
+    def callback(self,data):
         max_angle = 90
         final_grasp_pose = 0
-        final_grasp_pose_offset = 0
 
+        num_too_far = 0
         num_bad_angle = 0
         num_bad_plan = 0
 
@@ -151,14 +153,12 @@ class GraspExecutor:
 
             if theta_approach < max_angle:
                 
-                self.move_group.set_start_state(self.move_home_robot_state)
                 self.move_group.set_pose_target(p_base)
                 plan_to_final = self.move_group.plan()
 
                 self.move_group.clear_pose_targets()
                 if plan_to_final.joint_trajectory.points:
 
-                    self.move_group.set_start_state(self.move_home_robot_state)
                     self.move_group.set_pose_target(p_base_offset)
                     plan_offset = self.move_group.plan()
 
@@ -188,13 +188,15 @@ class GraspExecutor:
 
         self.pose_publisher.publish(posearray)
 
+        rospy.loginfo("# too far: " + str(num_too_far))
         rospy.loginfo("# bad angle: " + str(num_bad_angle))
         rospy.loginfo("# bad plan: " + str(num_bad_plan))
 
-        if not final_grasp_pose:
-            plan_offset = 0
+        if final_grasp_pose:
+            self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
 
-        return final_grasp_pose_offset, plan_offset, final_grasp_pose
+        else:
+            rospy.loginfo("No pose target generated!")
 
     def move_to_position(self, grasp_pose, plan=None):
         self.move_group.set_pose_target(grasp_pose)
@@ -255,151 +257,45 @@ class GraspExecutor:
 
         return new_pose
 
-    def get_drop_pose(self):
-        drop = PoseStamped()
-
-        drop.pose.position.x = -0.450
-        drop.pose.position.y = -0.400
-        drop.pose.position.z = 0.487
-
-        return drop
-
     def run_motion(self, state, final_grasp_pose_offset, plan_offset, final_grasp_pose):
         if state == State.FIRST_GRAB:
-            self.move_group.set_start_state_to_current_state()
-            self.move_to_joint_position(self.move_home_joints)
             self.move_to_position(final_grasp_pose_offset, plan_offset)
             self.move_to_position(final_grasp_pose)
             self.command_gripper(close_gripper_msg())
             self.move_to_position(self.lift_up_pose())
 
-            rospy.sleep(1)
-            if self.gripper_data.gOBJ == 3:
-                rospy.loginfo("Robot has missed/dropped object!")
-                self.move_to_joint_position(self.move_home_joints)
-                self.move_to_joint_position(self.view_home_joints)
-            else:
-                # Go to move home position using joint
-                self.move_to_joint_position(self.move_home_joints)
+            # Go to move home position using joint
+            self.move_to_joint_position(self.move_home_joints)
 
-                self.move_to_joint_position(self.drop_object_joints)
-                self.command_gripper(open_gripper_msg())
-                self.move_to_joint_position(self.move_home_joints)
-                self.move_to_joint_position(self.view_home_joints)
+            self.move_to_joint_position(self.drop_object_joints)
+            self.command_gripper(open_gripper_msg())
+            self.move_to_joint_position(self.move_home_joints)
+            self.move_to_joint_position(self.view_home_joints)
 
-                self.state = State.SECOND_GRAB
-
-            rospy.sleep(2)
+            self.state = State.SECOND_GRAB
+            rospy.sleep(5)
         elif state == State.SECOND_GRAB:
-            self.move_group.set_start_state_to_current_state()
-            self.move_to_joint_position(self.move_home_joints)
             self.move_to_position(final_grasp_pose_offset, plan_offset)
             self.move_to_position(final_grasp_pose)
             self.command_gripper(close_gripper_msg())
             self.move_to_position(self.lift_up_pose())
 
-            rospy.sleep(1)
-            if self.gripper_data.gOBJ == 3:
-                rospy.loginfo("Robot has missed/dropped object!")
-                self.move_to_joint_position(self.move_home_joints)
-                self.move_to_joint_position(self.view_home_joints)
-            else:
-                # Go to move home position using joint
-                self.move_to_joint_position(self.move_home_joints)
+            # Go to move home position using joint
+            self.move_to_joint_position(self.move_home_joints)
 
-                self.move_to_joint_position(self.deliver_object_joints)
-                self.command_gripper(open_gripper_msg())
-                self.move_to_joint_position(self.move_home_joints)
+            self.move_to_joint_position(self.deliver_object_joints)
+            self.command_gripper(open_gripper_msg())
+            self.move_to_joint_position(self.move_home_joints)
 
-                self.state = State.FINISHED
-            rospy.sleep(2)
+            self.state = State.FINISHED
         else:
             rospy.loginfo("Robot has finished!")    
 
-    def get_robot_state(self, joint_list):
-        joint_state = JointState()
-        joint_state.header = Header()
-        joint_state.header.stamp = rospy.Time.now()
-        joint_state.name = ['shoulder_pan_joint', 'shoulder_lift_joint',  'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-        joint_state.position = joint_list
-        robot_state = RobotState()
-        robot_state.joint_state = joint_state
-
-        return robot_state
-
-
-    def launch_pcl_process(self, pcl_node):
-        pcl_process = self.launcher.launch(pcl_node)
-        while not pcl_process.is_alive():
-            rospy.sleep(0.1)
-        return pcl_process
-
-    def stop_pcl_process(self, pcl_process):
-        pcl_process.stop()
-        while pcl_process.is_alive():
-            rospy.sleep(0.1)
-        
 
     def main(self):
-        rate = rospy.Rate(1)
-        # Startup
-
-        while not self.gripper_data and not rospy.is_shutdown():
-            rospy.loginfo("Waiting for gripper to connect")
-            rospy.sleep(1)
-
-        self.command_gripper(reset_gripper_msg())
-        rospy.sleep(.1)
-        self.command_gripper(activate_gripper_msg())
-        rospy.sleep(.1)
-        self.command_gripper(close_gripper_msg())
-        rospy.sleep(.1)
-        self.command_gripper(open_gripper_msg())
-        rospy.sleep(.1)
-        rospy.loginfo("Gripper active")
-
-        # Go to move home position using joint
-        self.move_to_joint_position(self.move_home_joints)
-        rospy.sleep(0.1)
-        rospy.loginfo("Moved to Home Position")
-        self.move_to_joint_position(self.view_home_joints)
-        rospy.sleep(0.1)
-        rospy.loginfo("Moved to View Position")
-
-        while not rospy.is_shutdown():
-            # Boot up pcl
-            pcl_node = roslaunch.core.Node('grasp_executor', 'pcl_preprocess_node.py')
-            pcl_process = self.launch_pcl_process(pcl_node)
-
-
-            #Wait for a valid reading from agile grasp
-            self.agile_state = AgileState.RESET
-            while self.agile_state is not AgileState.READY:
-                rospy.loginfo("Waiting for agile grasp")
-                rospy.sleep(2)
-            
-            rospy.loginfo("Grasp detection complete")
-            #Stop pcl
-            self.stop_pcl_process(pcl_process)
-
-            #Find best grasp from reading
-            final_grasp_pose_offset, plan_offset, final_grasp_pose = self.find_best_grasp(self.agile_data)
-
-            if final_grasp_pose:
-                self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
-            else:
-                rospy.loginfo("No pose target generated!")
-
-            if self.state == State.FINISHED:
-                rospy.loginfo("Task complete!")
-                rospy.spin()
-            
-            rate.sleep()
+        pass
 
 
 if __name__ == '__main__':
-    try:
-        grasper = GraspExecutor()
-        grasper.main()
-    except KeyboardInterrupt:
-        pass
+    GraspExecutor()
+    rospy.spin()

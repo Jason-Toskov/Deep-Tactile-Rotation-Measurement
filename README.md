@@ -36,31 +36,5 @@ When ready to run grasp code:
 
 2. run `rosrun grasp_executor grasp.py` to run grasping node
 
-3. When the agile_grasp2 tab outputs a blank window, wait for a line displaying time taken to display in the tab and then press the 'x' in the window (As if you were closing the window).
 
 
-
-
-TODO:
-
-1. Add obstacles to scene to prevent weird plans
-
-2. Plan to grab off the table
-
-3. Actually grab the object
-
-4. Lift up object vertically off table
-
-5. Check if robot has grasped object
-
-6. Put object down and go home
-
-7. Regrasp
-
-8. Might need to add an approach based on the approach vector
-
-9. Set home pose and task space
-
-10. Grab out of box
-
-11. # grasping_from_box
