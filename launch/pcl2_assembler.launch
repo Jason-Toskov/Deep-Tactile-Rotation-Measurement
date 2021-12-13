@@ -1,0 +1,10 @@
+<launch>
+  <node type="point_cloud2_assembler" pkg="laser_assembler"
+        name="my_assembler">
+    <!-- cloud = topic to recieve clouds on -->
+    <remap from="cloud" to="my_cloud_in"/> 
+    <param name="max_clouds" type="int" value="400" />
+    <!-- I think this sets the fixed frame to be base_link, and tf takes care of everything else (maybe) -->
+    <param name="fixed_frame" type="string" value="base_link" />
+  </node>
+</launch>
