@@ -48,13 +48,37 @@ AGILE_STATE_TRANSITION = {
 class GraspExecutor:
 
     def __init__(self):
+        # Need pcl_stitcher_service.py running
         rospy.init_node('grasp_executor', anonymous=True)
+        rospy.loginfo("Waiting for PCL stitching node")
         rospy.wait_for_service('generate_pcl')
+        rospy.loginfo("Node active!")
 
-        self.tf_listener_ = TransformListener()
-        self.launcher = roslaunch.scriptapi.ROSLaunch()
-        self.launcher.start()
+        #### Useful variables ####
+        #Positions
+        self.view_home_joints = [0.24985386431217194, -0.702608887349264, -2.0076406637774866, -1.7586587111102503, 1.5221580266952515, 0.25777095556259155]
+        self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
+        self.drop_object_joints = [0.14647944271564484, -1.8239172140704554, -1.0428651014911097, -1.8701766172992151, 1.6055123805999756, 0.03247687593102455]
+        self.deliver_object_joints = [-0.5880172888385218, -2.375404659901754, -0.8875716368304651, -1.437070671712057, 1.6041597127914429, 0.032297488301992416]
 
+        self.box_drop = self.get_drop_pose()
+        self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
+
+        # Initializations
+        self.state = State.FIRST_GRAB
+        self.agile_state = AgileState.WAIT_FOR_ONE
+
+        self.gripper_data = 0
+        self.agile_data = 0
+
+
+        #### Rospy startups ####
+
+        # self.tf_listener_ = TransformListener()
+        # self.launcher = roslaunch.scriptapi.ROSLaunch()
+        # self.launcher.start()
+
+        # Moveit stuff
         self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',
                                                moveit_msgs.msg.DisplayTrajectory,
                                                queue_size=20)
@@ -65,29 +89,18 @@ class GraspExecutor:
         self.group_name = "manipulator"
         self.move_group = moveit_commander.MoveGroupCommander(self.group_name)
 
+        # Publisher for grasp arrows
         self.pose_publisher = rospy.Publisher("/pose_viz", PoseArray, queue_size=1)
-
-        self.box_drop = self.get_drop_pose()
-
-        self.state = State.FIRST_GRAB
-
-        self.gripper_data = 0
+        
+        # Gripper nodes
         self.gripper_sub = rospy.Subscriber('/Robotiq2FGripperRobotInput', inputMsg.Robotiq2FGripper_robot_input, self.gripper_state_callback)
         self.gripper_pub = rospy.Publisher('/Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
 
-        self.view_home_joints = [0.24985386431217194, -0.702608887349264, -2.0076406637774866, -1.7586587111102503, 1.5221580266952515, 0.25777095556259155]
-        self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
-        self.drop_object_joints = [0.14647944271564484, -1.8239172140704554, -1.0428651014911097, -1.8701766172992151, 1.6055123805999756, 0.03247687593102455]
-        self.deliver_object_joints = [-0.5880172888385218, -2.375404659901754, -0.8875716368304651, -1.437070671712057, 1.6041597127914429, 0.032297488301992416]
-
-        self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
-
-        self.agile_data = 0
-        self.agile_state = AgileState.WAIT_FOR_ONE
-
+        # Nodes for stitched point cloud
         self.generate_pcl = rospy.ServiceProxy('generate_pcl', PCLStitch)
         self.PCL_stitched_publisher = rospy.Publisher("/processed_PCL2_stitched", PointCloud2, queue_size=1)
 
+        # Agile grasp node
         rospy.Subscriber("/detect_grasps/grasps", GraspListMsg, self.agile_callback)
 
     def agile_callback(self, data):
@@ -118,42 +131,38 @@ class GraspExecutor:
             position =  g.surface
             rospy.loginfo("Grasp cam orientation found!")
 
-            p_cam = PoseStamped()
+            p_base = PoseStamped()
 
             offset_dist = 0.1
 
-            p_cam.pose.position.x = position.x 
-            p_cam.pose.position.y = position.y 
-            p_cam.pose.position.z = position.z 
+            p_base.pose.position.x = position.x 
+            p_base.pose.position.y = position.y 
+            p_base.pose.position.z = position.z 
 
-            p_cam.pose.orientation.x = q[1]
-            p_cam.pose.orientation.y = q[2]
-            p_cam.pose.orientation.z = q[3]
-            p_cam.pose.orientation.w = q[0]
+            p_base.pose.orientation.x = q[1]
+            p_base.pose.orientation.y = q[2]
+            p_base.pose.orientation.z = q[3]
+            p_base.pose.orientation.w = q[0]
 
-            p_cam_offset = copy.deepcopy(p_cam)
-            p_cam_offset.pose.position.x -= g.approach.x *offset_dist
-            p_cam_offset.pose.position.y -= g.approach.y *offset_dist
-            p_cam_offset.pose.position.z -= g.approach.z *offset_dist
+            p_base_offset = copy.deepcopy(p_base)
+            p_base_offset.pose.position.x -= g.approach.x *offset_dist
+            p_base_offset.pose.position.y -= g.approach.y *offset_dist
+            p_base_offset.pose.position.z -= g.approach.z *offset_dist
 
-            self.tf_listener_.waitForTransform("/camera_link", "/base_link", rospy.Time(), rospy.Duration(4))
+            # self.tf_listener_.waitForTransform("/base", "/base_link", rospy.Time(), rospy.Duration(4))
 
-            p_cam.header.frame_id = "camera_link"
-            p_base = self.tf_listener_.transformPose("/base_link", p_cam)
-
-            p_cam_offset.header.frame_id = "camera_link"
-            p_base_offset = self.tf_listener_.transformPose("/base_link", p_cam_offset)
+            # Here we need to define the frame the pose is in for moveit
+            p_base.header.frame_id = "base_link"
+            p_base_offset.header.frame_id = "base_link"
 
             poses.append(copy.deepcopy(p_base.pose))
 
-            transform_matrix = self.tf_listener_.asMatrix("/base_link", p_cam.header)
-            approach_base = np.matmul(transform_matrix, np.array([g.approach.x, g.approach.y, g.approach.z, 1]).T)
-            approach_base = approach_base[:3]
+            approach_base = np.array([g.approach.x, g.approach.y, g.approach.z])
             approach_base = approach_base / np.linalg.norm(approach_base)
 
             theta_approach = np.arccos(np.dot(approach_base, np.array([0,0,-1])))*180/np.pi
 
-            rospy.loginfo("Grasp base orientation found")   
+            rospy.loginfo("Grasp base orientation found")  
 
             if theta_approach < max_angle:
                 
@@ -318,15 +327,23 @@ class GraspExecutor:
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.1)
         rospy.loginfo("Moved to Home Position")
-        self.move_to_joint_position(self.view_home_joints)
-        rospy.sleep(0.1)
-        rospy.loginfo("Moved to View Position")
+        # self.move_to_joint_position(self.view_home_joints)
+        # rospy.sleep(0.1)
+        # rospy.loginfo("Moved to View Position")
+
+        workspace_old = rospy.get_param("/detect_grasps/workspace")
+        rospy.loginfo("Old workspace was: ")
+        rospy.loginfo(workspace_old)
+        rospy.set_param("/detect_grasps/workspace", [-0.78, -0.41, -0.12, 0.158, -10, 10])
+        rospy.loginfo("New workspace is: ")
+        rospy.loginfo(rospy.get_param("/detect_grasps/workspace"))
+        # pdb.set_trace()
 
         while not rospy.is_shutdown():
 
             self.agile_state = AgileState.WAIT_FOR_ONE
-            point_cloud = self.generate_pcl()
-            self.PCL_stitched_publisher.publish(point_cloud)
+            point_cloud = self.generate_pcl(0)
+            self.PCL_stitched_publisher.publish(point_cloud.cloud)
 
             #Wait for a valid reading from agile grasp
             while self.agile_state is not AgileState.READY:
@@ -346,6 +363,9 @@ class GraspExecutor:
             if self.state == State.FINISHED:
                 rospy.loginfo("Task complete!")
                 rospy.spin()
+            
+            self.command_gripper(open_gripper_msg())
+            rospy.sleep(.1)
             
             rate.sleep()
 

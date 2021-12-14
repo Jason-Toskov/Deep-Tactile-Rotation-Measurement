@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+  <include file="$(find camera_driver)/launch/realsense_driver.launch"/>
+
+  <include file="$(find ur_robot_driver)/launch/ur5_bringup.launch">
+    <arg name="robot_ip" value="10.0.0.2"/>
+  </include>
+
+  <node name="Robotiq2FGripperRtuNode" pkg="robotiq_2f_gripper_control" type="Robotiq2FGripperRtuNode.py" args="/dev/ttyUSB0" output="screen"/>
+
+  <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch"/>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find grasp_executor)/cfg/grasp_scene.rviz" required="true" />
+
+  <include file="$(find grasp_executor)/launch/pcl2_assembler.launch"/>
+
+  <include file="$(find agile_grasp2)/launch/robot_detect_grasps.launch"/>
+
+</launch>

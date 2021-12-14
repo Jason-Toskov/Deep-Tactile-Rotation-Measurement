@@ -8,6 +8,8 @@ project(grasp_executor)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED
+  std_msgs
+  sensor_msgs
   message_generation
 )
 
@@ -67,6 +69,7 @@ add_service_files(
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
+  sensor_msgs
   std_msgs  # Or other packages containing msgs
 )
 
