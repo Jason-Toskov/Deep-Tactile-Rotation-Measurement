@@ -74,10 +74,6 @@ class GraspExecutor:
 
         #### Rospy startups ####
 
-        # self.tf_listener_ = TransformListener()
-        # self.launcher = roslaunch.scriptapi.ROSLaunch()
-        # self.launcher.start()
-
         # Moveit stuff
         self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',
                                                moveit_msgs.msg.DisplayTrajectory,
@@ -121,7 +117,9 @@ class GraspExecutor:
         data.grasps.sort(key=lambda x : x.score, reverse=True)
         rospy.loginfo("Grasps Sorted!")
         
+        # loop through grasps from high to low quality
         for g in data.grasps:
+            # Get grasp pose from agile grasp outputs
             R = np.zeros((3,3))
             R[:, 0] = vector3ToNumpy(g.approach)
             R[:, 1] = vector3ToNumpy(g.axis)
@@ -131,6 +129,7 @@ class GraspExecutor:
             position =  g.surface
             rospy.loginfo("Grasp cam orientation found!")
 
+            #Create poses for grasp and pulled back (offset) grasp
             p_base = PoseStamped()
 
             offset_dist = 0.1
@@ -149,23 +148,25 @@ class GraspExecutor:
             p_base_offset.pose.position.y -= g.approach.y *offset_dist
             p_base_offset.pose.position.z -= g.approach.z *offset_dist
 
-            # self.tf_listener_.waitForTransform("/base", "/base_link", rospy.Time(), rospy.Duration(4))
 
             # Here we need to define the frame the pose is in for moveit
             p_base.header.frame_id = "base_link"
             p_base_offset.header.frame_id = "base_link"
 
+            # Used for visualization
             poses.append(copy.deepcopy(p_base.pose))
 
+            # Find angle between -z axis and approach
             approach_base = np.array([g.approach.x, g.approach.y, g.approach.z])
             approach_base = approach_base / np.linalg.norm(approach_base)
-
             theta_approach = np.arccos(np.dot(approach_base, np.array([0,0,-1])))*180/np.pi
 
             rospy.loginfo("Grasp base orientation found")  
 
+            # If approach points up, no good            
             if theta_approach < max_angle:
                 
+                # Check if plan to grasp is valid
                 self.move_group.set_start_state(self.move_home_robot_state)
                 self.move_group.set_pose_target(p_base)
                 plan_to_final = self.move_group.plan()
@@ -173,16 +174,19 @@ class GraspExecutor:
 
                 if plan_to_final.joint_trajectory.points:
 
+                    #Check id plan to offset grasp pose is valid
                     self.move_group.set_start_state(self.move_home_robot_state)
                     self.move_group.set_pose_target(p_base_offset)
                     plan_offset = self.move_group.plan()
                     self.move_group.clear_pose_targets()
 
                     if plan_offset.joint_trajectory.points:
+                        # If so, we've found the grasp to use
                         final_grasp_pose = p_base
                         final_grasp_pose_offset = p_base_offset
                         rospy.loginfo("Final grasp found!")
                         rospy.loginfo(" Angle: %.4f",  theta_approach)
+                        # Only display the grasp being used
                         poses = [poses[-1]]
                         break
                     else:
@@ -196,14 +200,13 @@ class GraspExecutor:
                 rospy.loginfo("Invalid angle of: " + str(theta_approach) + " deg")
                 num_bad_angle += 1
 
+        # Publish grasp pose arrows
         posearray = PoseArray()
         posearray.poses = poses
         posearray.header.frame_id = "base_link"
-
-        print("final_grasp_pose", final_grasp_pose)
-
         self.pose_publisher.publish(posearray)
 
+        print("final_grasp_pose", final_grasp_pose)
         rospy.loginfo("# bad angle: " + str(num_bad_angle))
         rospy.loginfo("# bad plan: " + str(num_bad_plan))
 
@@ -212,36 +215,37 @@ class GraspExecutor:
 
         return final_grasp_pose_offset, plan_offset, final_grasp_pose
 
+    # Use class variables to move to a pose
     def move_to_position(self, grasp_pose, plan=None):
         move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, grasp_pose, plan)
 
+    # Use class variables to move to a joint angle pose
     def move_to_joint_position(self, joint_array, plan=None):
         move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, joint_array, plan)
 
+    # Publish a msg to the gripper
     def command_gripper(self, grip_msg):
         self.gripper_pub.publish(grip_msg)
         
     def gripper_state_callback(self, data):
         self.gripper_data = data
 
+    # Defines post grasp lift pose
     def lift_up_pose(self):
         lift_dist = 0.05
-
         new_pose = self.move_group.get_current_pose()
-
         new_pose.pose.position.z += lift_dist
-
         return new_pose
 
+    # Defines position to drop 
     def get_drop_pose(self):
         drop = PoseStamped()
-
         drop.pose.position.x = -0.450
         drop.pose.position.y = -0.400
         drop.pose.position.z = 0.487
-
         return drop
 
+    # Function that defines how the robot moves and operates
     def run_motion(self, state, final_grasp_pose_offset, plan_offset, final_grasp_pose):
         if state == State.FIRST_GRAB:
             self.move_group.set_start_state_to_current_state()
@@ -294,6 +298,7 @@ class GraspExecutor:
         else:
             rospy.loginfo("Robot has finished!")    
 
+    # Takes a joint array and returns a robot state
     def get_robot_state(self, joint_list):
         joint_state = JointState()
         joint_state.header = Header()
@@ -302,7 +307,6 @@ class GraspExecutor:
         joint_state.position = joint_list
         robot_state = RobotState()
         robot_state.joint_state = joint_state
-
         return robot_state
 
     def main(self):
@@ -313,6 +317,7 @@ class GraspExecutor:
             rospy.loginfo("Waiting for gripper to connect")
             rospy.sleep(1)
 
+        # Initialize gripper
         self.command_gripper(reset_gripper_msg())
         rospy.sleep(.1)
         self.command_gripper(activate_gripper_msg())
@@ -323,14 +328,12 @@ class GraspExecutor:
         rospy.sleep(.1)
         rospy.loginfo("Gripper active")
 
-        # Go to move home position using joint
+        # Go to move home position using joint definition
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.1)
         rospy.loginfo("Moved to Home Position")
-        # self.move_to_joint_position(self.view_home_joints)
-        # rospy.sleep(0.1)
-        # rospy.loginfo("Moved to View Position")
-
+ 
+        # set agile workspace
         workspace_old = rospy.get_param("/detect_grasps/workspace")
         rospy.loginfo("Old workspace was: ")
         rospy.loginfo(workspace_old)
@@ -341,6 +344,7 @@ class GraspExecutor:
 
         while not rospy.is_shutdown():
 
+            # Generate a point cloud from several readings
             self.agile_state = AgileState.WAIT_FOR_ONE
             point_cloud = self.generate_pcl(0)
             self.PCL_stitched_publisher.publish(point_cloud.cloud)
@@ -355,7 +359,9 @@ class GraspExecutor:
             #Find best grasp from reading
             final_grasp_pose_offset, plan_offset, final_grasp_pose = self.find_best_grasp(self.agile_data)
 
+            # If a valid grasp pose was found:
             if final_grasp_pose:
+                # Run the current motion on it 
                 self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
             else:
                 rospy.loginfo("No pose target generated!")

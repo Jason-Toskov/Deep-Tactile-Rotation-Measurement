@@ -77,7 +77,6 @@ class PCLStitcher:
         self.pcl_rosmsg.header.stamp.nsecs = rospy.Time.now().nsecs
 
     def generate_pcl(self, req):
-        ## TODO: Generate and return concatenated pcl here
         rospy.loginfo("Reached PCL service")
 
         time_start = rospy.Time.now()
