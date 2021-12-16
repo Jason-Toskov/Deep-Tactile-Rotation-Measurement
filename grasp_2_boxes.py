@@ -7,7 +7,7 @@ from tf import TransformListener
 import sys
 import copy 
 import pdb
-from enum import Enum
+from enum import Enum, IntEnum
 from time import sleep
 import numpy as np
 from pyquaternion import Quaternion
@@ -29,10 +29,15 @@ from grasp_executor.srv import PCLStitch
 
 
 
-class State(Enum):
+class State(IntEnum):
     BOOTUP=0
     LEFT_TO_RIGHT=1
     RIGHT_TO_LEFT=2
+
+STATE_TRANSITION = {
+    State.LEFT_TO_RIGHT: State.RIGHT_TO_LEFT,
+    State.RIGHT_TO_LEFT: State.LEFT_TO_RIGHT
+}
 
 class AgileState(Enum):
     RESET = 0
@@ -56,13 +61,19 @@ class GraspExecutor:
 
         #### Useful variables ####
         #Positions
-        self.view_home_joints = [0.24985386431217194, -0.702608887349264, -2.0076406637774866, -1.7586587111102503, 1.5221580266952515, 0.25777095556259155]
+        # self.view_home_joints = [0.24985386431217194, -0.702608887349264, -2.0076406637774866, -1.7586587111102503, 1.5221580266952515, 0.25777095556259155]
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
-        self.drop_object_joints = [0.14647944271564484, -1.8239172140704554, -1.0428651014911097, -1.8701766172992151, 1.6055123805999756, 0.03247687593102455]
-        self.deliver_object_joints = [-0.5880172888385218, -2.375404659901754, -0.8875716368304651, -1.437070671712057, 1.6041597127914429, 0.032297488301992416]
+        # self.drop_object_joints = [0.14647944271564484, -1.8239172140704554, -1.0428651014911097, -1.8701766172992151, 1.6055123805999756, 0.03247687593102455]
+        # self.deliver_object_joints = [-0.5880172888385218, -2.375404659901754, -0.8875716368304651, -1.437070671712057, 1.6041597127914429, 0.032297488301992416]
         #### TODO:
-        # self.drop_joints = ???
-        # self.workspaces = ????
+        self.drop_joints = {
+            State.RIGHT_TO_LEFT: [0.8464177250862122, -1.7617242972003382, -1.3163345495807093, -1.664525334035055, 1.5956381559371948, 0.03218962997198105],
+            State.LEFT_TO_RIGHT: [-0.4250834623919886, -1.76178485551943, -1.3162863890277308, -1.6644414106952112, 1.5955902338027954, 0.03218962997198105],
+            }
+        self.workspaces = {
+            State.RIGHT_TO_LEFT: [-0.610, -0.335, 0.140, 0.505, 0, 1],
+            State.LEFT_TO_RIGHT: [-0.580, -0.305, -0.520, -0.160, 0, 1],
+            }
 
         self.box_drop = self.get_drop_pose()
         self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
@@ -376,12 +387,10 @@ class GraspExecutor:
         # 
  
         ####TODO: Generate an intial box to grab from based on # of objects in the box
-        # self.state = ????
+        self.state = State.RIGHT_TO_LEFT
 
         ####TODO: Set initial workspace based on current state
-        #
-        #
-        #
+        ws_curr = self.workspaces[self.state]
 
         ####TODO: Init counter of failed grasps
         # failed_grasps = 0 <maybe?>
@@ -396,9 +405,10 @@ class GraspExecutor:
 
         while not rospy.is_shutdown():
 
+            rospy.set_param("/detect_grasps/workspace", ws_curr)
             # Generate a point cloud from several readings
             self.agile_state = AgileState.WAIT_FOR_ONE
-            point_cloud = self.generate_pcl(0) #### TODO: set generate_pcl input based on state
+            point_cloud = self.generate_pcl(int(self.state)) #### TODO: set generate_pcl input based on state
             self.PCL_stitched_publisher.publish(point_cloud.cloud)
 
             #Wait for a valid reading from agile grasp
@@ -411,6 +421,25 @@ class GraspExecutor:
             ####TODO: sample from list randomly instead maybe?
             #Find best grasp from reading
             final_grasp_pose_offset, plan_offset, final_grasp_pose = self.find_best_grasp(self.agile_data)
+
+            drop_flag = None
+            if final_grasp_pose:
+                #Run the current motion on it 
+                drop_flag = self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
+            else:
+                rospy.loginfo("No pose target generated!")
+
+            self.state = STATE_TRANSITION[self.state]
+            ws_curr = self.workspaces[self.state]
+
+            self.move_to_joint_position(self.move_home_joints)
+            self.command_gripper(open_gripper_msg())
+            rospy.sleep(.1)
+            
+            rate.sleep()
+
+
+
 
             ####TODO: 
             #

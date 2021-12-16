@@ -53,8 +53,17 @@ class PCL_Processing:
     def check_box_bounds(self, x):
         x = self.transformed_vector(x)
         
-        if -0.78 < x[0] < -0.41 :
-            if -0.12 < x[1] < 0.158:
+        # if -0.78 < x[0] < -0.41 :
+        #     if -0.12 < x[1] < 0.158:
+
+        # RHS box
+        if -0.610 < x[0] < -0.335 :
+            if 0.140 < x[1] < 0.505:
+
+        # # LHS box
+        # if -0.580 < x[0] < -0.305 :
+        #     if -0.520 < x[1] < -0.160:
+
                 return True
         
         return False
