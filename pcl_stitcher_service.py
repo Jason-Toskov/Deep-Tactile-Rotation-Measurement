@@ -59,8 +59,6 @@ SCAN_JOINTS = {
         [0.5746720433235168, -1.4123638311969202, -1.7548344771014612, -1.3990066687213343, 1.6094144582748413, -1.0251277128802698],
         [0.8106227517127991, -1.684913460408346, -1.4413684050189417, -2.00739032426943, 1.2154176235198975, -0.5774405638324183],
         [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272],
-        # [0.8106227517127991, -1.684913460408346, -1.4413684050189417, -2.00739032426943, 1.2154176235198975, -0.5774405638324183]
-        # [0.9827637672424316, -1.8470724264727991, -1.169802490864889, -2.3461859861956995, 1.1007671356201172, -0.4934776465045374]
     ]
 }
 
@@ -100,9 +98,7 @@ class PCLStitcher:
         time_start = rospy.Time.now()
 
         for joints in SCAN_JOINTS[State(req.mode)]:
-            # print(joints)
-            # self.move_group.set_start_state_to_current_state()
-            move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, joints, no_confirm=False)
+            move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, joints, no_confirm=True)
             rospy.sleep(1)
             self.PCL_publisher.publish(self.pcl_rosmsg)
 
