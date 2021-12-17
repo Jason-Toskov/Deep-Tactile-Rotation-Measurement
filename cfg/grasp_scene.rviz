@@ -501,7 +501,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.009999999776482582
       Style: Flat Squares
-      Topic: /processed_PCL2
+      Topic: /processed_PCL2_stitched
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -534,25 +534,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.3685135841369629
+      Distance: 1.4357199668884277
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.3782169818878174
-        Y: 0.16078788042068481
-        Z: 0.08843040466308594
+        X: -0.44283366203308105
+        Y: 0.03837592527270317
+        Z: 0.0034612775780260563
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.3247965574264526
+      Pitch: 0.6847963929176331
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.563554763793945
+      Yaw: 3.1285512447357178
     Saved: ~
 Window Geometry:
   Displays:

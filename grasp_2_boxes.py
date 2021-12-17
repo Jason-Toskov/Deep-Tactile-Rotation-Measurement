@@ -72,11 +72,10 @@ class GraspExecutor:
             State.LEFT_TO_RIGHT: [-0.580, -0.305, -0.520, -0.160, 0, 1],
             }
 
-        self.box_drop = self.get_drop_pose()
         self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
 
-        self.dont_display_plan = False
-        self.choose_random = False
+        self.dont_display_plan = True
+        self.choose_random = True
 
         # Initializations
         self.state = State.BOOTUP
@@ -255,18 +254,10 @@ class GraspExecutor:
 
     # Defines post grasp lift pose
     def lift_up_pose(self):
-        lift_dist = 0.05
+        lift_dist = 0.1
         new_pose = self.move_group.get_current_pose()
         new_pose.pose.position.z += lift_dist
         return new_pose
-
-    # Defines position to drop 
-    def get_drop_pose(self):
-        drop = PoseStamped()
-        drop.pose.position.x = -0.450
-        drop.pose.position.y = -0.400
-        drop.pose.position.z = 0.487
-        return drop
 
     def run_motion(self, state, final_grasp_pose_offset, plan_offset, final_grasp_pose):
         # Set based on state to either box
@@ -276,14 +267,19 @@ class GraspExecutor:
         #Move home
         self.move_group.set_start_state_to_current_state()
         self.move_to_joint_position(self.move_home_joints)
+        rospy.sleep(0.2)
 
         #Grab object
         self.move_to_position(final_grasp_pose_offset, plan_offset)
+        rospy.sleep(0.2)
         self.move_to_position(final_grasp_pose)
+        rospy.sleep(0.2)
         self.command_gripper(close_gripper_msg())
+        rospy.sleep(1)
 
         #Move to drop position, checking if the object is dropped
         self.move_to_position(self.lift_up_pose())
+        rospy.sleep(0.2)
 
         joints_to_move_to = [self.move_home_joints, drop_joints]
         for joints in joints_to_move_to:
@@ -296,7 +292,9 @@ class GraspExecutor:
         
         #Drop object
         self.command_gripper(open_gripper_msg())
+        rospy.sleep(0.5)
         self.move_to_joint_position(self.move_home_joints)
+        rospy.sleep(0.2)
 
         return dropped_flag
 
@@ -361,6 +359,9 @@ class GraspExecutor:
             #Wait for a valid reading from agile grasp
             while not rospy.is_shutdown() and self.agile_state is not AgileState.READY:
                 rospy.loginfo("Waiting for agile grasp")
+                self.command_gripper(close_gripper_msg())
+                rospy.sleep(0.2)
+                self.command_gripper(open_gripper_msg())
                 rospy.sleep(2)
             
             rospy.loginfo("Grasp pose detection complete")

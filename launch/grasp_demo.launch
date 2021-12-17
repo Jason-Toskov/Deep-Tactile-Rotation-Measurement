@@ -10,10 +10,12 @@
 
   <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch"/>
 
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find grasp_executor)/cfg/grasp_scene.rviz" required="true" />
-
   <include file="$(find grasp_executor)/launch/pcl2_assembler.launch"/>
 
   <include file="$(find agile_grasp2)/launch/robot_detect_grasps.launch"/>
+
+  <node name="generate_pcl_service" pkg="grasp_executor" type="pcl_stitcher_service.py" output="screen"/>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find grasp_executor)/cfg/grasp_scene.rviz" required="true" />
 
 </launch>

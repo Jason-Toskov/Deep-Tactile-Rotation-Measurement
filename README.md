@@ -35,14 +35,14 @@ METHOD 2 (Manually boot each node):
 
 	9. Run `roslaunch grasp_executor pcl2_assembler.launch` to initialize point cloud stitcher helper
 
-	0. Run `roslaunch agile_grasp2 robot_detect_grasps.launch` to launch agile grasp
+	10. Run `roslaunch agile_grasp2 robot_detect_grasps.launch` to launch agile grasp
+
+	11. Run `rosrun grasp_executor pcl_stitcher_service.py` to initialize point cloud detector
 
 
 When ready to run grasp code:
 
-1. Run `rosrun grasp_executor pcl_stitcher_service.py` to initialize point cloud detector
-
-2. Run `rosrun grasp_executor grasp_with_pclsrv.py ` to run grasping node
+1. Run `rosrun grasp_executor grasp_2_boxes.py ` to run grasping node
 
 
 
