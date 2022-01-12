@@ -1,7 +1,9 @@
+#!/usr/bin/env python
 import numpy as np
 import cv2
 
 import rospy
+from time import sleep
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -27,11 +29,18 @@ class AngleDetector():
         self.current_image = None
         rospy.Subscriber(self.image_topic, Image, self.image_callback)
 
+        rospy.init_node("Angle_detector")
+
+        print("Init!")
+
     def image_callback(self, data):
         self.current_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
     def angle_calculation(self, point0, point1):
-        temp_angle = np.arctan(np.abs((point0[1]-point1[1])/(point0[0]-point1[0])))*180/np.pi
+        temp_angle = np.arctan(np.abs(float(point0[1]-point1[1])/float(point0[0]-point1[0])))*180/np.pi
+        print((point0[1]-point1[1]))
+        print((point0[0]-point1[0]))
+        print(np.abs((point0[1]-point1[1])/(point0[0]-point1[0])))
 
         if self.state == Quadrant.NW:
             self.angle = -temp_angle
@@ -82,6 +91,7 @@ class AngleDetector():
             rospy.sleep(1)
 
         while not rospy.is_shutdown():
+            print("Reached loop!")
             # image = cv2.imread('img_temp.jpeg')
             result = self.current_image.copy()
             image = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2HSV)
@@ -90,11 +100,11 @@ class AngleDetector():
             mask = cv2.inRange(image, lower, upper)
             result = cv2.bitwise_and(result, result, mask=mask)
 
-            cv2.imshow('mask', mask)
-            # cv2.imwrite('mask.jpeg', mask)
-            cv2.imshow('result', result)
-            # cv2.imwrite('result.jpeg', result)
-            cv2.waitKey()
+            # cv2.imshow('mask', mask)
+            cv2.imwrite('mask.jpeg', mask)
+            # cv2.imshow('result', result)
+            cv2.imwrite('result.jpeg', result)
+            # cv2.waitKey()
 
             # params = cv2.SimpleBlobDetector_Params()
             # params.filterByArea = True
@@ -149,10 +159,10 @@ class AngleDetector():
             print(self.angle)
 
 
-            cv2.imshow('canvas', canvas)
-            # cv2.imwrite('canvas.jpeg', canvas)
+            # cv2.imshow('canvas', canvas)
+            cv2.imwrite('canvas.jpeg', canvas)
 
-            cv2.waitKey()
+            # cv2.waitKey()
 
             rate.sleep()
 
