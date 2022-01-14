@@ -34,3 +34,13 @@ def reset_gripper_msg():
     command.rACT = 0
 
     return command
+
+def gripper_position_msg(width):
+    command = outputMsg.Robotiq2FGripper_robot_output()
+    command.rPR = width
+    command.rACT = 1
+    command.rGTO = 1
+    command.rSP  = 255
+    command.rFR  = 150
+
+    return command

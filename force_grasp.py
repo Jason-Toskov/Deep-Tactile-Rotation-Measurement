@@ -89,8 +89,13 @@ class GraspExecutor:
 
         self.move_home_robot_state = self.get_robot_state(self.move_home_joints)
 
-        #TODO: Hard-code corner positions
-        self.corner_pos_list = [[0,0],[0,10],[10,10],[10,0]]
+        # Hard-code corner positions
+        # Start Top Right (robot perspective) and go around clockwise
+        corner_1 = [-825,235]
+        corner_2 = [-410,235]
+        corner_3 = [-410,-100]
+        corner_4 = [-825,-100]
+        self.corner_pos_list = [corner_1, corner_2, corner_3, corner_4]
 
         # AgileGrasp data
         self.agile_data = 0
@@ -150,6 +155,13 @@ class GraspExecutor:
 
             # Find approach angle
             z_angle, offset_pos = self.calculate_approach(grasp_pos, corner_pos, -offset_dist)
+
+            # Print results
+            rospy.loginfo("Nearest corner: %d", nearest_corner)
+            rospy.loginfo("Corner Position - X: %d Y:%d", corner_pos[0], corner_pos[1])
+            rospy.loginfo("Grasp Position - X: %d Y:%d", grasp_pos[0], grasp_pos[1])
+            rospy.loginfo("Z-angle: %d", z_angle)
+
             # Find angle of gripper to the ground from hard-coded value
             y_angle = np.deg2rad(grasp_angle)
 
@@ -224,7 +236,6 @@ class GraspExecutor:
             distance_list[i] = math.dist(grasp_pos, corner_pos)
         # Nearest corner 
         nearest_corner = distance_list.index(min(distance_list))
-        rospy.loginfo("Nearest corner: %d", nearest_corner)
 
         return nearest_corner
 
@@ -235,7 +246,6 @@ class GraspExecutor:
         y_diff = final_pos[1] - start_pos[1]
         # Angle of the gripper to the corner (in z-axis)
         z_angle = atan2(y_diff, x_diff)
-        rospy.loginfo("Z-angle: %f", z_angle)
 
         # Calculate offset position
         v = np.array([x_diff, y_diff])
@@ -425,12 +435,12 @@ class GraspExecutor:
         rospy.loginfo("Gripper active")
 
         # Go to move home position using joint
-        self.move_to_joint_position(self.move_home_joints)
-        rospy.sleep(0.1)
-        rospy.loginfo("Moved to Home Position")
-        self.move_to_joint_position(self.view_home_joints)
-        rospy.sleep(0.1)
-        rospy.loginfo("Moved to View Position")
+        # self.move_to_joint_position(self.move_home_joints)
+        # rospy.sleep(0.1)
+        # rospy.loginfo("Moved to Home Position")
+        # self.move_to_joint_position(self.view_home_joints)
+        # rospy.sleep(0.1)
+        # rospy.loginfo("Moved to View Position")
 
         while not rospy.is_shutdown():
             # Boot up pcl
@@ -451,11 +461,12 @@ class GraspExecutor:
             final_grasp_pose_offset, plan_offset, final_grasp_pose = self.find_best_grasp(self.agile_data)
 
             if final_grasp_pose:
-                self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
+                # self.run_motion(self.state, final_grasp_pose_offset, plan_offset, final_grasp_pose)
+                pass
             else:
                 rospy.loginfo("No pose target generated!")
 
-            if self.state == State.FINISHED:
+            if self.state == State.SECOND_GRAB:
                 rospy.loginfo("Task complete!")
                 rospy.spin()
             
