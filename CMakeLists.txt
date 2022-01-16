@@ -57,6 +57,7 @@ find_package(catkin REQUIRED
 add_service_files(
   FILES
   PCLStitch.srv
+  AngleTrack.srv
 )
 
 ## Generate actions in the 'action' folder

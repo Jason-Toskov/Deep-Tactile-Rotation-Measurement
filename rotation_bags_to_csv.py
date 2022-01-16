@@ -1,7 +1,11 @@
+#!/usr/bin/env python
+import rospy
 import rosbag
 import glob
 import itertools
 import pandas as pd
+from grasp_executor.srv import AngleTrack
+from std_srvs.srv import Empty
 
 FILE_DIR = './'
 CSV_NAME = 'data'
@@ -21,14 +25,14 @@ def init_df(df):
     
     return df
 
-def tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1): 
+def tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1, track_angle_srv): 
     cols_sensor = ['gfX', 'gfY', 'gfZ', 'gtX', 'gtY', 'gtZ', 'friction_est', 'target_grip_force']
     cols_pillar = ['dX', 'dY', 'dZ', 'fX', 'fY', 'fZ', 'in_contact']
 
     for im, tac_0, tac_1 in itertools.izip(image_data, tactile_data_0, tactile_data_1):
         new_row = pd.Series(dtype='int64')
-        angle = angle_from_image(im) #TODO: Call the blob_detector service here to get the angle
-        new_row['true_angle'] = angle
+        response = track_angle_srv(im) #TODO: Call the blob_detector service here to get the angle
+        new_row['true_angle'] = response.angle
 
         for i in range(2):
             tac = tac_0 if i==0 else tac_1
@@ -43,9 +47,7 @@ def tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1):
 
     return df
 
-def main():
-    # df = pd.DataFrame() 
-    # df = init_df(df, num_sensors=NUM_SENSORS)
+def main(track_angle_srv, reset_angle_srv):
     num_df = len(glob.glob(FILE_DIR+OUTPUT_DIR+'*.csv'))
 
     bag_list = glob.glob(FILE_DIR+BAG_DIR+'*.bag')
@@ -60,12 +62,28 @@ def main():
         tactile_data_1 = [msg for _, msg, _ in bag.read_message(topics=['tactile_1'])]
 
         if len(image_data) == len(tactile_data_0) == len(tactile_data_1):
-            df = tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1)
+            df = tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1, track_angle_srv)
             df.to_csv(FILE_DIR+OUTPUT_DIR+CSV_NAME+'_'+str(num_df)+'.csv', index=False)
             num_df += 1
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
 
+        reset_angle_srv()
         
 if __name__ == "__main__":
-    main()
+    rospy.wait_for_service('track_angle')
+    try:
+        track_angle_srv = rospy.ServiceProxy('track_angle', AngleTrack)
+        rospy.loginfo("Angle tracking service available!")
+    except rospy.ServiceException as e:
+        print("Service call failed: %s"%e)
+
+    rospy.wait_for_service('reset_angle_tracking')
+    try:
+        reset_angle_srv = rospy.ServiceProxy('reset_angle_tracking', Empty)
+        rospy.loginfo("Reset service available!")
+    except rospy.ServiceException as e:
+        print("Service call failed: %s"%e)
+    
+
+    main(track_angle_srv, reset_angle_srv)
