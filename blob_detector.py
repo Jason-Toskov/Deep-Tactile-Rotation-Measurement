@@ -5,8 +5,9 @@ import cv2
 import rospy
 from time import sleep
 from sensor_msgs.msg import Image
+from std_msgs.msg import Empty as EmptyMsg
 from cv_bridge import CvBridge, CvBridgeError
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, EmptyResponse
 from grasp_executor.srv import AngleTrack
 
 from enum import Enum
@@ -44,6 +45,8 @@ class AngleDetector():
         self.state = Quadrant.INIT
         self.closest_state = Quadrant.INIT
         self.angle = None
+        print('reset!')
+        return EmptyResponse()
 
     def angle_calculation(self, point0, point1):
         temp_angle = np.arctan(np.abs(float(point0[1]-point1[1])/float(point0[0]-point1[0])))*180/np.pi
@@ -103,9 +106,9 @@ class AngleDetector():
 
         print("Reached loop!")
         # image = cv2.imread('img_temp.jpeg')
-        image = req.im
-        result = req.im.copy()
-        image = cv2.cvtColor(req.im, cv2.COLOR_BGR2HSV)
+        im = self.bridge.imgmsg_to_cv2(req.im, desired_encoding='bgr8')
+        result = im.copy()
+        image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
         lower = np.array([0,85,0])
         upper = np.array([7,255,255])
         mask = cv2.inRange(image, lower, upper)

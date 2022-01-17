@@ -10,7 +10,7 @@ import numpy as np
 
 FILENAME = 'Indoor'
 ROOT_DIR = '/home/Dataset'
-BAGFILE = 'data_1642137260.bag'
+BAGFILE = 'data_1642136892.bag'
 
 if __name__ == '__main__':
     bag = rosbag.Bag(BAGFILE)
