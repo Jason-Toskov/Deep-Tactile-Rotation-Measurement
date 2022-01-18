@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import rospy
-import rosbag
+import rosbag, copy
 import glob
 import itertools
 import pandas as pd
@@ -46,9 +46,14 @@ def tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1, track_ang
             # pdb.set_trace()
             for j in range(9):
                 for attr in cols_pillar:
-                    df[attr+'_pillar_'+str(j)+'_sensor_'+str(i)] = getattr(tac.pillars[j], attr)
+                    new_row[attr+'_pillar_'+str(j)+'_sensor_'+str(i)] = getattr(tac.pillars[j], attr)
+                    # print(j, tac.pillars[j], attr)
+                    # raw_input()
 
-        df = df.append(new_row, ignore_index=True)
+        df = df.append(copy.deepcopy(new_row), ignore_index=True)
+        # print(new_row)
+        # raw_input()
+
 
     return df
 
@@ -65,6 +70,16 @@ def main(track_angle_srv, reset_angle_srv):
         image_data = [msg for _, msg, _ in bag.read_messages(topics=['image'])]
         tactile_data_0 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_0'])]
         tactile_data_1 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_1'])]
+
+        timestep_0 = [msg.tus for msg in tactile_data_0]
+        timestep_1 = [msg.tus for msg in tactile_data_0]
+
+        print(len(timestep_0))
+        print(len(set(timestep_0)))
+        print(len(timestep_1))
+        print(len(set(timestep_1)))
+
+        # pdb.set_trace()
 
         if len(image_data) == len(tactile_data_0) == len(tactile_data_1):
             df = tactile_data_to_df(df, image_data, tactile_data_0, tactile_data_1, track_angle_srv)

@@ -23,10 +23,18 @@ class RotationMeasurer():
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
         self.dont_display_plan = True
         self.gripper_data = 0
-        self.close_width = 170
-        self.slip_width = 160
+
+        # for the box + tape
+        # self.close_width = 226
+        # self.slip_width = 160
+
+
+        # for the deoderant
+        self.close_width = 223
+        self.slip_width = 90
 
         self.peturbed_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
+        
         self.peturbed_joints[3] += 3*0.523/4
 
          #### Rospy startups ####

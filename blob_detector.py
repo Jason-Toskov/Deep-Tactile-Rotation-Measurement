@@ -53,6 +53,7 @@ class AngleDetector():
         print((point0[1]-point1[1]))
         print((point0[0]-point1[0]))
         print(np.abs((point0[1]-point1[1])/(point0[0]-point1[0])))
+        print(self.state)
 
         if self.state == Quadrant.NW:
             self.angle = -temp_angle
@@ -71,6 +72,7 @@ class AngleDetector():
             self.state = Quadrant.NW if rightmost_point == lowest_point else Quadrant.SW
             self.closest_state = Quadrant.SW if rightmost_point == lowest_point else Quadrant.NW
         elif self.state == Quadrant.NW:
+            print(rightmost_point, lowest_point, self.state, self.closest_state)
             if rightmost_point is not lowest_point:
                 self.state = self.closest_state
         elif self.state == Quadrant.SW:
@@ -106,19 +108,32 @@ class AngleDetector():
 
         print("Reached loop!")
         # image = cv2.imread('img_temp.jpeg')
-        im = self.bridge.imgmsg_to_cv2(req.im, desired_encoding='bgr8')
+        im = self.bridge.imgmsg_to_cv2(req.im, desired_encoding='8UC3')
         result = im.copy()
         image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
+        
         lower = np.array([0,85,0])
         upper = np.array([7,255,255])
         mask = cv2.inRange(image, lower, upper)
+
+
+        lower1 = np.array([175,85,0])
+        upper1 = np.array([180,255,255])
+        mask1 = cv2.inRange(image, lower1, upper1)
+
+        mask = mask + mask1
+
         result = cv2.bitwise_and(result, result, mask=mask)
 
-        # cv2.imshow('mask', mask)
+        cv2.imshow('orig', im)
+        cv2.imshow('hsv', image)
+        cv2.imshow('mask', mask)
+
+        cv2.imwrite('img_temp.jpeg', im)
+
         cv2.imwrite('mask.jpeg', mask)
         # cv2.imshow('result', result)
         cv2.imwrite('result.jpeg', result)
-        # cv2.waitKey()
 
         # params = cv2.SimpleBlobDetector_Params()
         # params.filterByArea = True
@@ -167,14 +182,16 @@ class AngleDetector():
             self.angle_calculation(center1, center2)
         else:
             self.closest_new_state()
-            self.angle_calculation(center1, center2)
             self.state_update(center1, center2)
+            self.angle_calculation(center1, center2)
 
         print(self.angle)
 
 
-        # cv2.imshow('canvas', canvas)
+        cv2.imshow('canvas', canvas)
         cv2.imwrite('canvas.jpeg', canvas)
+        cv2.waitKey()
+
 
             # cv2.waitKey()
 
