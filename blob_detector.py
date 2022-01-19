@@ -85,8 +85,11 @@ class AngleDetector:
         current_time = timeit.default_timer()
 
         if self.calc_time:
-            self.angular_velocity = (self.angle - prev_angle) / (
+            new_angular_velocity = (self.angle - prev_angle) / (
                 current_time - self.calc_time
+            )
+            self.angular_velocity = (
+                0.8 * new_angular_velocity + 0.2 * self.angular_velocity
             )
 
         self.calc_time = current_time
