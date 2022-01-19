@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 import rospy
 import sys
+import numpy as np
+import copy
+from pyquaternion import Quaternion
+import tf
+import geometry_msgs
 
 import moveit_commander
 import moveit_msgs.msg
@@ -15,6 +20,8 @@ from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as out
 from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg, gripper_position_msg
 from util import dist_to_guess, vector3ToNumpy, move_ur5
 
+PI = np.pi
+
 class RotationMeasurer():
     def __init__(self):
         rospy.init_node("Rotation_measurement", anonymous=True)
@@ -23,6 +30,9 @@ class RotationMeasurer():
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
         self.dont_display_plan = True
         self.gripper_data = 0
+
+        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, 5*PI/12, -PI/12, -PI/6, -PI/4, -PI/3, -5*PI/12,]
+        self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, 5*PI/12]
 
         # for the box + tape
         # self.close_width = 226
@@ -33,9 +43,9 @@ class RotationMeasurer():
         self.close_width = 223
         self.slip_width = 90
 
-        self.peturbed_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
+        # self.peturbed_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
         
-        self.peturbed_joints[3] += 3*0.523/4
+        # self.peturbed_joints[3] += 3*0.523/4
 
          #### Rospy startups ####
 
@@ -63,6 +73,10 @@ class RotationMeasurer():
 
     def gripper_state_callback(self, data):
         self.gripper_data = data
+
+    # Use class variables to move to a pose
+    def move_to_position(self, grasp_pose, plan=None):
+        move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, grasp_pose, plan, no_confirm=self.dont_display_plan)
 
     # Use class variables to move to a joint angle pose
     def move_to_joint_position(self, joint_array, plan=None):
@@ -96,54 +110,75 @@ class RotationMeasurer():
         rospy.loginfo("Moved to Home Position")
 
         while not rospy.is_shutdown():
-            rospy.loginfo("Moving above object")
-            self.move_to_joint_position(self.grasp_loc_offset_joints)
-            rospy.sleep(0.1)
+            for ground_angle_peturb in self.on_ground_pertubation_angles_coeff:
+                for air_angle_peturb in self.in_air_pertubation_angles_coeff:
+                    rospy.loginfo("Moving above object")
+                    self.move_to_joint_position(self.grasp_loc_offset_joints)
+                    rospy.sleep(0.1)
 
-            rospy.loginfo("Moving down to object")
-            self.move_to_joint_position(self.grasp_loc_joints)
-            rospy.sleep(0.1)
+                    # Rotate gripper to be close to ground here
+                    # Set the pose to have an offset angle
+                    rospy.loginfo("Moving down to object")
+                    self.move_to_joint_position(self.grasp_loc_joints)
+                    rospy.sleep(0.1)
 
-            # Ask user to put object into position and press enter
-            in_flag = raw_input("\nPlease put object into gripper fingers and press 'y': ")
-            while in_flag is not 'y' and not rospy.is_shutdown():
-                in_flag = raw_input("Input was not 'y': ")
+                    curr_rpy = self.move_group.get_current_rpy()
+                    curr_rpy[1] += ground_angle_peturb #Change the pitch (y axis)
 
-            self.command_gripper(gripper_position_msg(self.close_width))
-            rospy.sleep(.5)
+                    currPose = self.move_group.get_current_pose()
+                    quaternion = tf.transformations.quaternion_from_euler(curr_rpy[0], curr_rpy[1], curr_rpy[2])
+                    currPose.pose.orientation.x = quaternion[0]
+                    currPose.pose.orientation.y = quaternion[1]
+                    currPose.pose.orientation.z = quaternion[2]
+                    currPose.pose.orientation.w = quaternion[3]
 
-            rospy.loginfo("Moving up")
-            self.move_to_joint_position(self.grasp_loc_offset_joints)
-            rospy.sleep(0.1)
+                    rospy.loginfo("Peturbing angle")
+                    self.move_to_position(currPose)
+                    rospy.sleep(0.1)
 
-            rospy.loginfo("Peturbing end effector")
-            #Can add an EE angle pertubation here
-            self.move_to_joint_position(self.peturbed_joints)
+                    # Ask user to put object into position and press enter
+                    in_flag = raw_input("\nPlease put object into gripper fingers and press 'y': ")
+                    while in_flag is not 'y' and not rospy.is_shutdown():
+                        in_flag = raw_input("Input was not 'y': ")
 
-            raw_input("Press enter to start data collection: ")
+                    self.command_gripper(gripper_position_msg(self.close_width))
+                    rospy.sleep(.5)
 
-            # Send a request to a service to bag some data (maybe by publishing to some topic)
-            self.collection_flag.data = True
-            self.collection_flag_pub.publish(self.collection_flag)
+                    rospy.loginfo("Moving up")
+                    self.move_to_joint_position(self.grasp_loc_offset_joints)
+                    rospy.sleep(0.1)
 
-            #Loosen gripper
-            self.command_gripper(gripper_position_msg(self.slip_width))
+                    rospy.loginfo("Peturbing end effector")
 
-            # Pause and wait for user to say rotation is done
-            raw_input("Press enter when object is fully rotated: ")
+                    #Can add an EE angle pertubation here
+                    self.peturbed_joints = copy.copy(self.grasp_loc_offset_joints)
+                    self.peturbed_joints[3] += air_angle_peturb
+                    self.move_to_joint_position(self.peturbed_joints)
 
-            # End data collection (by publishing a stop to the topic)
-            self.collection_flag.data = False
-            self.collection_flag_pub.publish(self.collection_flag)
-            rospy.sleep(1)
+                    raw_input("Press enter to start data collection: ")
 
-            # Drop object completely
-            self.command_gripper(open_gripper_msg())
+                    # Send a request to a service to bag some data (maybe by publishing to some topic)
+                    self.collection_flag.data = True
+                    self.collection_flag_pub.publish(self.collection_flag)
 
-            #Wait for user input saying theyve removed the object
-            raw_input("Press enter when object is removed from workspace: ")
+                    #Loosen gripper
+                    self.command_gripper(gripper_position_msg(self.slip_width))
 
-            rate.sleep()
+                    # Pause and wait for user to say rotation is done
+                    raw_input("Press enter when object is fully rotated: ")
+
+                    # End data collection (by publishing a stop to the topic)
+                    self.collection_flag.data = False
+                    self.collection_flag_pub.publish(self.collection_flag)
+                    rospy.sleep(1)
+
+                    # Drop object completely
+                    self.command_gripper(open_gripper_msg())
+
+                    #Wait for user input saying theyve removed the object
+                    raw_input("Press enter when object is removed from workspace: ")
+
+                    rate.sleep()
 
 
 if __name__ == "__main__":
