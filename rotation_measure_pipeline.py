@@ -6,6 +6,7 @@ import copy
 from pyquaternion import Quaternion
 import tf
 import geometry_msgs
+import pdb
 
 import moveit_commander
 import moveit_msgs.msg
@@ -27,21 +28,31 @@ class RotationMeasurer():
         rospy.init_node("Rotation_measurement", anonymous=True)
         self.grasp_loc_joints = [0.02149745263159275, -1.8356507460223597, -1.8032754103290003, -1.0827692190753382, 1.5707544088363647, -3.5587941304981996e-05]
         self.grasp_loc_offset_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
+        
+        # self.grasp_loc_offset_joints = [ 0.021449515596032143, -1.7220733801471155, -1.4936097303973597, -1.4966729323016565, 1.5708143711090088, 0.021395960822701454]
+
+
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
         self.dont_display_plan = True
         self.gripper_data = 0
 
-        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, 5*PI/12, -PI/12, -PI/6, -PI/4, -PI/3, -5*PI/12,]
-        self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, 5*PI/12]
+        self.grasp_loc_pose = self.set_pose("base_link",-0.5506,  0.0973, 0.0700,  0.4969, 0.5030, -0.4922, 0.5076)
+        self.grasp_loc_offset_pose = copy.deepcopy(self.grasp_loc_pose)
+        self.offset_z = 0.2
+        self.grasp_loc_offset_pose.pose.position.z += self.offset_z
+
+
+        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/12, -PI/6, -PI/4]
+        self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3]
+        # self.on_ground_pertubation_angles_coeff = [PI/3]
 
         # for the box + tape
-        # self.close_width = 226
-        # self.slip_width = 160
-
+        self.close_width = 175
+        self.slip_width = 163
 
         # for the deoderant
-        self.close_width = 223
-        self.slip_width = 90
+        # self.close_width = 223
+        # self.slip_width = 90
 
         # self.peturbed_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
         
@@ -86,6 +97,20 @@ class RotationMeasurer():
     def command_gripper(self, grip_msg):
         self.gripper_pub.publish(grip_msg)
 
+    def set_pose(self,frame, posx, posy, posz, orx, ory, orz, orw):
+        pose = PoseStamped()
+        pose.header.frame_id = frame
+        pose.pose.position.x = posx
+        pose.pose.position.y = posy
+        pose.pose.position.z = posz
+
+        pose.pose.orientation.x = orx
+        pose.pose.orientation.y = ory
+        pose.pose.orientation.z = orz
+        pose.pose.orientation.w = orw
+
+        return pose
+
     def main(self):
         rate = rospy.Rate(1)
 
@@ -114,27 +139,39 @@ class RotationMeasurer():
                 for air_angle_peturb in self.in_air_pertubation_angles_coeff:
                     rospy.loginfo("Moving above object")
                     self.move_to_joint_position(self.grasp_loc_offset_joints)
-                    rospy.sleep(0.1)
+                    rospy.sleep(0.5)
 
-                    # Rotate gripper to be close to ground here
-                    # Set the pose to have an offset angle
-                    rospy.loginfo("Moving down to object")
-                    self.move_to_joint_position(self.grasp_loc_joints)
-                    rospy.sleep(0.1)
+                    # pdb.set_trace()
+
 
                     curr_rpy = self.move_group.get_current_rpy()
                     curr_rpy[1] += ground_angle_peturb #Change the pitch (y axis)
+                    
+                    # print(curr_rpy)
 
-                    currPose = self.move_group.get_current_pose()
+                    currPose = copy.deepcopy(self.grasp_loc_pose) #self.move_group.get_current_pose()
                     quaternion = tf.transformations.quaternion_from_euler(curr_rpy[0], curr_rpy[1], curr_rpy[2])
                     currPose.pose.orientation.x = quaternion[0]
                     currPose.pose.orientation.y = quaternion[1]
                     currPose.pose.orientation.z = quaternion[2]
                     currPose.pose.orientation.w = quaternion[3]
 
-                    rospy.loginfo("Peturbing angle")
+                    # self.move_group.se
+
+                    # pdb.set_trace()
+
+
+                    # Rotate gripper to be close to ground here
+                    # Set the pose to have an offset angle
+                    rospy.loginfo("Moving down to object")
                     self.move_to_position(currPose)
                     rospy.sleep(0.1)
+
+                    
+
+                    # rospy.loginfo("Peturbing angle")
+                    # self.move_to_position(currPose)
+                    # rospy.sleep(0.1)
 
                     # Ask user to put object into position and press enter
                     in_flag = raw_input("\nPlease put object into gripper fingers and press 'y': ")
@@ -145,15 +182,31 @@ class RotationMeasurer():
                     rospy.sleep(.5)
 
                     rospy.loginfo("Moving up")
-                    self.move_to_joint_position(self.grasp_loc_offset_joints)
+
+                    currPose.pose.position.z += self.offset_z
+
+                    self.move_to_position(currPose)
                     rospy.sleep(0.1)
 
                     rospy.loginfo("Peturbing end effector")
 
+                    curr_rpy[1] -= ground_angle_peturb
+                    curr_rpy[1] += air_angle_peturb
+                    # curr_rpy_2 = self.move_group.get_current_rpy()
+                    # curr_rpy_2[1] += -ground_angle_peturb#air_angle_peturb - ground_angle_peturb  #Change the pitch (y axis)
+
+                    perturbedPose = self.move_group.get_current_pose()
+                    quaternion_2 = tf.transformations.quaternion_from_euler(curr_rpy[0], curr_rpy[1], curr_rpy[2])
+
+                    perturbedPose.pose.orientation.x = quaternion_2[0]
+                    perturbedPose.pose.orientation.y = quaternion_2[1]
+                    perturbedPose.pose.orientation.z = quaternion_2[2]
+                    perturbedPose.pose.orientation.w = quaternion_2[3]
+
                     #Can add an EE angle pertubation here
-                    self.peturbed_joints = copy.copy(self.grasp_loc_offset_joints)
-                    self.peturbed_joints[3] += air_angle_peturb
-                    self.move_to_joint_position(self.peturbed_joints)
+                    # self.peturbed_joints = copy.copy(self.grasp_loc_offset_joints)
+                    # self.peturbed_joints[3] += air_angle_peturb
+                    self.move_to_position(perturbedPose)
 
                     raw_input("Press enter to start data collection: ")
 

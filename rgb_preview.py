@@ -101,9 +101,9 @@ class DataBagger:
                             bag.write('tactile_0', self.tactile_data_0[1]) #save forces
                             bag.write('tactile_1', self.tactile_data_1[1])
 
-                            cv2.imshow("rgb", inRgb)
+                            # cv2.imshow("rgb", inRgb)
 
-                            cv2.waitKey(1)
+                            # cv2.waitKey(1)
 
                             # rate.sleep()#sleep for rate
                         ##once done, save bag

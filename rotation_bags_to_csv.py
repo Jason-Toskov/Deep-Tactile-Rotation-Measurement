@@ -6,13 +6,18 @@ import itertools
 import pandas as pd
 from grasp_executor.srv import AngleTrack
 from std_srvs.srv import Empty
-
+import os
 import pdb
 
 FILE_DIR = './'
 CSV_NAME = 'data'
-BAG_DIR = 'data_bags/'
-OUTPUT_DIR = 'data_csvs/'
+BAG_DIR = 'box_usbc/'
+OUTPUT_DIR = 'box_usbc_csvs/'
+
+if not os.path.exists(OUTPUT_DIR):
+    # Create a new directory because it does not exist 
+  os.makedirs(OUTPUT_DIR)
+  print("The new directory is created!")
 
 def init_df(df):
     cols_sensor = ['gfX', 'gfY', 'gfZ', 'gtX', 'gtY', 'gtZ', 'friction_est', 'target_grip_force']
@@ -61,6 +66,7 @@ def main(track_angle_srv, reset_angle_srv):
     num_df = len(glob.glob(FILE_DIR+OUTPUT_DIR+'*.csv'))
 
     bag_list = glob.glob(FILE_DIR+BAG_DIR+'*.bag')
+    print(FILE_DIR+BAG_DIR+'*.bag', bag_list)
 
     for bag_dir in bag_list:
         bag = rosbag.Bag(bag_dir)

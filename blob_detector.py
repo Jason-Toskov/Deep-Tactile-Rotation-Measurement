@@ -49,11 +49,15 @@ class AngleDetector():
         return EmptyResponse()
 
     def angle_calculation(self, point0, point1):
-        temp_angle = np.arctan(np.abs(float(point0[1]-point1[1])/float(point0[0]-point1[0])))*180/np.pi
-        print((point0[1]-point1[1]))
-        print((point0[0]-point1[0]))
-        print(np.abs((point0[1]-point1[1])/(point0[0]-point1[0])))
-        print(self.state)
+        if point0[0]-point1[0] == 0:
+            temp_angle = 90
+        else:
+            temp_angle = np.arctan(np.abs(float(point0[1]-point1[1])/float(point0[0]-point1[0])))*180/np.pi
+
+        # print((point0[1]-point1[1]))
+        # print((point0[0]-point1[0]))
+        # print(np.abs((point0[1]-point1[1])/(point0[0]-point1[0])))
+        # print(self.state)
 
         if self.state == Quadrant.NW:
             self.angle = -temp_angle
@@ -190,7 +194,7 @@ class AngleDetector():
 
         cv2.imshow('canvas', canvas)
         cv2.imwrite('canvas.jpeg', canvas)
-        cv2.waitKey()
+        cv2.waitKey(1)
 
 
             # cv2.waitKey()
