@@ -14,7 +14,9 @@ from grasp_executor.srv import AngleTrack
 from enum import Enum
 
 import sys
+
 PYTHON3 = sys.version_info.major == 3
+
 
 class Quadrant(Enum):
     INIT = 0
@@ -73,13 +75,17 @@ class AngleDetector:
         return self.angular_velocity
 
     def angle_calculation(self, point0, point1):
-        temp_angle = (
-            np.arctan(
-                np.abs(float(point0[1] - point1[1]) / float(point0[0] - point1[0]))
+        if point0[0] - point1[0] == 0:
+            temp_angle = 90
+        else:
+            temp_angle = (
+                np.arctan(
+                    np.abs(float(point0[1] - point1[1]) / float(point0[0] - point1[0]))
+                )
+                * 180
+                / np.pi
             )
-            * 180
-            / np.pi
-        )
+
         prev_angle = self.angle
 
         if self.state == Quadrant.NW:
@@ -140,7 +146,7 @@ class AngleDetector:
     def update_angle(self, im):
         # print("Reached loop!")
         # image = cv2.imread('img_temp.jpeg')
-        if not self.cv2Image:            
+        if not self.cv2Image:
             im = self.bridge.imgmsg_to_cv2(im, desired_encoding="8UC3")
         result = im.copy()
         image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
@@ -174,7 +180,9 @@ class AngleDetector:
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
             )
             # print(tmp, contours)
-            contours = sorted(contours, key=lambda el: cv2.contourArea(el), reverse=True)
+            contours = sorted(
+                contours, key=lambda el: cv2.contourArea(el), reverse=True
+            )
 
         else:
             _, contours, _ = cv2.findContours(

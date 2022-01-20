@@ -12,6 +12,8 @@ import time, timeit
 import math
 from cv_bridge import CvBridge
 
+from grasp_executor.msg import DataCollectState
+
 class DataBagger:
     def __init__(self):
         rospy.init_node("Data_bagger", anonymous=True)
@@ -19,8 +21,9 @@ class DataBagger:
         self.image_topic = "/realsense/rgb"
         self.current_image = 0
         self.collect_data_flag = False
+        self.collection_info = None
         # self.image_sub = rospy.Subscriber(self.image_topic, Image, self.image_callback)
-        self.collection_flag_sub = rospy.Subscriber('/collect_data', Bool, self.collect_flag_callback)  ##TODO
+        self.collection_flag_sub = rospy.Subscriber('/collect_data', DataCollectState, self.collect_flag_callback)  ##TODO
         
         ##TODO: Node to read tactile data
         self.tactile_data_0 = (0, None)
@@ -77,13 +80,15 @@ class DataBagger:
                         ##init a bag
                         # rospy.loginfo('reached try statement')
                         bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
-
+                        bag.write('metadata', self.collection_info)
+                        
                         while self.collect_data_flag:
 
                             t2 = timeit.default_timer()
                             print(1 / (t2 - t1))
                             t1 = timeit.default_timer()
                             inRgb = qRgb.get().getCvFrame()  # blocking call, will wait until a new data has arrived
+                            time_now = rospy.Time.from_sec(time.time())
 
                             cv_image = bridge.cv2_to_imgmsg(inRgb)
                             
@@ -96,14 +101,14 @@ class DataBagger:
                             prev_0 = self.tactile_data_0[0]
                             prev_1 = self.tactile_data_1[0]
 
-                            time_now = time.time()#Get current time
+                            bag.write('time', time_now)
                             bag.write('image', cv_image) #Save an image
                             bag.write('tactile_0', self.tactile_data_0[1]) #save forces
                             bag.write('tactile_1', self.tactile_data_1[1])
 
-                            cv2.imshow("rgb", inRgb)
+                            # cv2.imshow("rgb", inRgb)
 
-                            cv2.waitKey(1)
+                            # cv2.waitKey(1)
 
                             # rate.sleep()#sleep for rate
                         ##once done, save bag
@@ -125,5 +130,7 @@ class DataBagger:
         self.tactile_data_1 = (self.tactile_data_1[0] + 1, sensor_state_msg)
 
     def collect_flag_callback(self, bool_msg):
+        self.collection_info = bool_msg
         self.collect_data_flag = bool_msg.data
+        
 DataBagger()
