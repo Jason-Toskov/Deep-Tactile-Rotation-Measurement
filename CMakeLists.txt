@@ -47,11 +47,10 @@ find_package(catkin REQUIRED
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  DataCollectState.msg
+)
 
 ## Generate services in the 'srv' folder
 add_service_files(
@@ -108,6 +107,7 @@ catkin_package(
 #  LIBRARIES grasp_executor
 #  CATKIN_DEPENDS other_catkin_pkg
 #  DEPENDS system_lib
+  CATKIN_DEPENDS message_runtime
 )
 
 ###########

@@ -4,3 +4,4 @@ colour_imgs/
 data_bags/
 data_csvs/
 box_usbc_csvs/
+grasp_TFOS_data_collection.py
