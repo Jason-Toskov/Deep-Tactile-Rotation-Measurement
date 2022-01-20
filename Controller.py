@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 import cv2
+from multiprocessing import Process, Queue
 
 import rospy
 from time import sleep
@@ -37,6 +38,8 @@ class AdaptiveController:
             queue_size=1,
         )
 
+        self.prev_data = None
+
         for _ in range(20):
             self.AD.update_angle(self.getImage)
 
@@ -49,9 +52,18 @@ class AdaptiveController:
             rospy.sleep(1)
             rospy.loginfo("Waiting for gripper!")
 
-        arrived = False
-        while not arrived and not rospy.is_shutdown():
-            arrived = self.control_loop()
+        self.q = Queue()
+
+        self.p1 = Process(target=self.getCameraFrame)
+        self.p2 = Process(target=self.control)
+
+        self.p1.start()
+        self.p2.start()
+
+        # wait for p2 to finish
+        self.p2.join()
+        # kill the camera
+        self.p1.kill()
 
     def initialiseCamera(self):
 
@@ -75,14 +87,32 @@ class AdaptiveController:
         qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
         self.getImage = qRgb.get().getCvFrame
 
-    def control_loop(self):
-        time_delay = 0
+    def getCameraFrame(self):
 
         image = self.getImage()
         self.AD.update_angle(image)
+        self.q.put((timeit.default_timer(), self.angle, self.angularVelocity))
+
+    def control(self):
+        arrived = False
+        while not arrived and not rospy.is_shutdown():
+            arrived = self.control_loop()
+
+    def control_loop(self):
+
+        # camera is not initalised
+        if self.prev_data is None and len(self.q) == 0:
+            return False
+
+        self.prev_data = self.prev_data if len(self.q) == 0 else self.q.get()
+
+        (prev_time, angle, angleVel) = self.prev_data
+
+        time_since_update = max(0, prev_time - self.prev_data[0])
+        time_delay = 0
 
         # future predict the angle of the object, offset by time delay
-        object_angle = self.angle() + self.angularVelocity() * time_delay
+        object_angle = angle + angleVel * (time_delay + time_since_update)
 
         current_time = timeit.default_timer()
 
@@ -90,7 +120,7 @@ class AdaptiveController:
             self.close_gripper()
             return True
 
-        canMove = (current_time - self.last_move_time) > 0.1
+        canMove = (current_time - self.last_move_time) > 0.05
 
         # if the object is slow, and the gripper has opened
         if self.angularVelocity < 0.3 and canMove:
