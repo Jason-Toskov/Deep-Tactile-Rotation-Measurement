@@ -13,6 +13,8 @@ from grasp_executor.srv import AngleTrack
 
 from enum import Enum
 
+import sys
+PYTHON3 = sys.version_info.major == 3
 
 class Quadrant(Enum):
     INIT = 0
@@ -27,7 +29,7 @@ class AngleDetectorService:
         rospy.init_node("Angle_detector")
         # self.image_topic = "/realsense/rgb"
 
-        self.AD = AngleDetector(writeImages=True, showImages=False)
+        self.AD = AngleDetector(writeImages=True, showImages=False, cv2Image=False)
         # self.current_image = None
         # rospy.Subscriber(self.image_topic, Image, self.image_callback)
         rospy.Service("track_angle", AngleTrack, self.update_angle)
@@ -45,16 +47,17 @@ class AngleDetectorService:
 
 
 class AngleDetector:
-    def __init__(self, writeImages=True, showImages=True):
+    def __init__(self, writeImages=True, showImages=True, cv2Image=False):
 
         self.bridge = CvBridge()
         self.state = Quadrant.INIT
         self.closest_state = Quadrant.INIT
         self.angle = None
-        self.angular_velocity = None
+        self.angular_velocity = 0
         self.calc_time = None
         self.writeImages = writeImages
-        self.showImages = True
+        self.showImages = showImages
+        self.cv2Image = cv2Image
 
     def reset_tracking(self):
         self.state = Quadrant.INIT
@@ -62,6 +65,12 @@ class AngleDetector:
         self.angle = None
         self.angular_velocity = None
         print("reset!")
+
+    def getAngle(self):
+        return self.angle
+
+    def getAngularVelocity(self):
+        return self.angular_velocity
 
     def angle_calculation(self, point0, point1):
         temp_angle = (
@@ -129,10 +138,10 @@ class AngleDetector:
             self.closest_state = Quadrant.NW if self.angle > -135 else Quadrant.SE
 
     def update_angle(self, im):
-        print("Reached loop!")
+        # print("Reached loop!")
         # image = cv2.imread('img_temp.jpeg')
-
-        im = self.bridge.imgmsg_to_cv2(im, desired_encoding="8UC3")
+        if not self.cv2Image:            
+            im = self.bridge.imgmsg_to_cv2(im, desired_encoding="8UC3")
         result = im.copy()
         image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 
@@ -152,17 +161,26 @@ class AngleDetector:
             cv2.imshow("orig", im)
             cv2.imshow("hsv", image)
             cv2.imshow("mask", mask)
+            cv2.waitKey(1)
 
         if self.writeImages:
             cv2.imwrite("img_temp.jpeg", im)
             cv2.imwrite("mask.jpeg", mask)
             cv2.imwrite("result.jpeg", result)
 
-        _, contours, _ = cv2.findContours(
-            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-        )
+        contours = None
+        if PYTHON3:
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            )
+            # print(tmp, contours)
+            contours = sorted(contours, key=lambda el: cv2.contourArea(el), reverse=True)
 
-        contours.sort(key=lambda el: cv2.contourArea(el), reverse=True)
+        else:
+            _, contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            )
+            contours.sort(key=lambda el: cv2.contourArea(el), reverse=True)
 
         canvas = result.copy()
 
