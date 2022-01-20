@@ -102,7 +102,7 @@ class AdaptiveController:
     def getCameraFrame(self):
         image = self.qRgb.get().getCvFrame()
         self.AD.update_angle(image)
-        self.q.put((timeit.default_timer(), self.angle, self.angularVelocity))
+        self.q.put((timeit.default_timer(), self.angle(), self.angularVelocity()))
 
     def control(self):
         arrived = False
@@ -145,7 +145,7 @@ class AdaptiveController:
         canMove = (current_time - self.last_move_time) > 0.05
 
         # if the object is slow, and the gripper has opened
-        if self.angularVelocity < 0.3 and canMove:
+        if angleVel < 0.3 and canMove:
             self.slightly_open_gripper()
 
         return False
