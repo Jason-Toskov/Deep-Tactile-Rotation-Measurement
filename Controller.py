@@ -145,7 +145,7 @@ class AdaptiveController:
         canMove = (current_time - self.last_move_time) > 0.05
 
         # if the object is slow, and the gripper has opened
-        if self.angularVelocity() < 0.3 and canMove:
+        if self.angularVelocity < 0.3 and canMove:
             self.slightly_open_gripper()
 
         return False
