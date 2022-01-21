@@ -28,17 +28,18 @@ class RotationMeasurer():
     def __init__(self):
         rospy.init_node("Rotation_measurement", anonymous=True)
         self.grasp_loc_joints = [0.02149745263159275, -1.8356507460223597, -1.8032754103290003, -1.0827692190753382, 1.5707544088363647, -3.5587941304981996e-05]
-        self.grasp_loc_offset_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
+        # self.grasp_loc_offset_joints = [0.02149745263159275, -1.723703686391012, -1.4892142454730433, -1.5087464491473597, 1.5707664489746094, -3.5587941304981996e-05]
+        self.grasp_loc_offset_joints = [0.034072648733854294, -1.2315533796893519, -1.9322221914874476, -1.5579307715045374, 1.5709701776504517, 0.012650847434997559]
 
-
-        # self.grasp_loc_offset_joints = [ 0.021449515596032143, -1.7220733801471155, -1.4936097303973597, -1.4966729323016565, 1.5708143711090088, 0.021395960822701454]
 
 
         self.move_home_joints = [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272]
         self.dont_display_plan = True
         self.gripper_data = 0
 
-        self.grasp_loc_pose = self.set_pose("base_link",-0.5506,  0.0973, 0.0700,  0.4969, 0.5030, -0.4922, 0.5076)
+        # self.grasp_loc_pose = self.set_pose("base_link",-0.5506,  0.0973, 0.0700,  0.4969, 0.5030, -0.4922, 0.5076)
+        self.grasp_loc_pose = self.set_pose("base_link", -0.4, 0.0973, 0.07, 0.4969, 0.5030, -0.4922, 0.5076)
+
         self.grasp_loc_offset_pose = copy.deepcopy(self.grasp_loc_pose)
         self.offset_z = 0.2
         self.grasp_loc_offset_pose.pose.position.z += self.offset_z
@@ -49,8 +50,8 @@ class RotationMeasurer():
         # self.on_ground_pertubation_angles_coeff = [PI/3]
 
         # for the box + tape
-        self.close_width = 175
-        self.slip_width = 163
+        # self.close_width = 175
+        # self.slip_width = 163
 
         # for the deoderant
         # self.close_width = 223
@@ -61,8 +62,11 @@ class RotationMeasurer():
         self.close_width = 175###
 
         self.loosest_grasp = 160
-        self.tightest_grasp = 166
-        self.width_step = 3
+        self.tightest_grasp = 165
+        self.num_step = 2
+
+        self.skip_count = 174
+        self.collect_data = True
 
          #### Rospy startups ####
 
@@ -139,17 +143,22 @@ class RotationMeasurer():
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.1)
         rospy.loginfo("Moved to Home Position")
-
+        count = 0
         while not rospy.is_shutdown():
             for wrist_orientation in [0, PI]: ## TODO: check if pi should be positive or negative
                 offset_joints = copy.deepcopy(self.grasp_loc_offset_joints)
-                offset_joints[] += wrist_orientation ##TODO get the correct element here, and then check that the rotations are right
+                offset_joints[5] += wrist_orientation ##TODO get the correct element here, and then check that the rotations are right
 
-                for width in range(self.loosest_grasp, self.tightest_grasp+1, self.width_step):
+                for width in np.round(np.linspace(self.loosest_grasp, self.tightest_grasp+1, num=self.num_step)).astype(np.uint8):
                     for ground_angle_peturb in self.on_ground_pertubation_angles_coeff:
                         for air_angle_peturb in self.in_air_pertubation_angles_coeff:
+
+                            if count < self.skip_count:
+                                count += 1
+                                continue
+
                             rospy.loginfo("Moving above object")
-                            self.move_to_joint_position(self.grasp_loc_offset_joints)
+                            self.move_to_joint_position(offset_joints)
                             rospy.sleep(0.5)
 
                             # pdb.set_trace()
@@ -185,9 +194,7 @@ class RotationMeasurer():
                             # rospy.sleep(0.1)
 
                             # Ask user to put object into position and press enter
-                            in_flag = raw_input("\nPlease put object into gripper fingers and press 'y': ")
-                            while in_flag is not 'y' and not rospy.is_shutdown():
-                                in_flag = raw_input("Input was not 'y': ")
+                            raw_input("\nPlease put object into gripper fingers and press ENTER: ")
 
                             self.command_gripper(gripper_position_msg(self.close_width))
                             rospy.sleep(.5)
@@ -223,7 +230,7 @@ class RotationMeasurer():
 
                             # Send a request to a service to bag some data (maybe by publishing to some topic)
                             collection_info = DataCollectState()
-                            collection_info.data = True
+                            collection_info.data = self.collect_data
                             collection_info.gripperTwist = round(wrist_orientation/PI*180)
                             collection_info.eeGroundRot = round(ground_angle_peturb/PI*180)
                             collection_info.eeAirRot = round(air_angle_peturb/PI*180)

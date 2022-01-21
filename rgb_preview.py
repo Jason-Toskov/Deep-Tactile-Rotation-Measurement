@@ -5,12 +5,13 @@ import depthai as dai
 import rospy
 import rosbag
 from sensor_msgs.msg import Image
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Header
 from papillarray_ros_v2.msg import SensorState
 
 import time, timeit
 import math
 from cv_bridge import CvBridge
+
 
 from grasp_executor.msg import DataCollectState
 
@@ -62,14 +63,15 @@ class DataBagger:
             print('Usb speed: ', device.getUsbSpeed().name)
 
             # Output queue will be used to get the rgb frames from the output defined above
-            qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+            qRgb = device.getOutputQueue(name="rgb", maxSize=1, blocking=False)
             t1 = timeit.default_timer()
 
 
-            bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
-            rospy.loginfo('bag created')
+            # bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
+            # rospy.loginfo('bag created')
             while self.tactile_data_0[1] == None or self.tactile_data_1[1] == None:
                 continue
+            rospy.loginfo("Tactile running, node started")
                
             while not rospy.is_shutdown():
                
@@ -79,7 +81,7 @@ class DataBagger:
                     try:
                         ##init a bag
                         # rospy.loginfo('reached try statement')
-                        bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
+                        bag = rosbag.Bag('./recorded_data_bags/data_'+str(int(math.floor(time.time())))+".bag", 'w') 
                         bag.write('metadata', self.collection_info)
                         
                         while self.collect_data_flag:
@@ -88,8 +90,10 @@ class DataBagger:
                             print(1 / (t2 - t1))
                             t1 = timeit.default_timer()
                             inRgb = qRgb.get().getCvFrame()  # blocking call, will wait until a new data has arrived
-                            time_now = rospy.Time.from_sec(time.time())
 
+                            time_now = rospy.Time.from_sec(time.time())
+                            header = Header()
+                            header.stamp = time_now
                             cv_image = bridge.cv2_to_imgmsg(inRgb)
                             
                             if prev_0 == self.tactile_data_0[0]:
@@ -101,7 +105,7 @@ class DataBagger:
                             prev_0 = self.tactile_data_0[0]
                             prev_1 = self.tactile_data_1[0]
 
-                            bag.write('time', time_now)
+                            bag.write('time', header)
                             bag.write('image', cv_image) #Save an image
                             bag.write('tactile_0', self.tactile_data_0[1]) #save forces
                             bag.write('tactile_1', self.tactile_data_1[1])

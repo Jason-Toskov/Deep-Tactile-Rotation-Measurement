@@ -13,8 +13,8 @@ from grasp_executor.msg import DataCollectState
 
 FILE_DIR = './'
 CSV_NAME = 'data'
-BAG_DIR = 'box_usbc/'
-OUTPUT_DIR = 'box_usbc_csvs/'
+BAG_DIR = 'recorded_data_bags/'
+OUTPUT_DIR = 'recorded_data_csvs/'
 
 if not os.path.exists(OUTPUT_DIR):
     # Create a new directory because it does not exist 
@@ -79,12 +79,13 @@ def main(track_angle_srv, reset_angle_srv):
         df = pd.DataFrame() 
         df = init_df(df)
 
-        _, meta, _ = bag.read_messages(topics=['metadata'])
 
-        time_data = [msg for _, msg, _ in bag.read_messages(topics=['time'])]
+        time_data = [msg.stamp for _, msg, _ in bag.read_messages(topics=['time'])]
         image_data = [msg for _, msg, _ in bag.read_messages(topics=['image'])]
         tactile_data_0 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_0'])]
         tactile_data_1 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_1'])]
+
+        meta = [msg for _, msg, _ in bag.read_messages(topics=['metadata'])][0]
 
         timestep_0 = [msg.tus for msg in tactile_data_0]
         timestep_1 = [msg.tus for msg in tactile_data_0]
@@ -100,7 +101,8 @@ def main(track_angle_srv, reset_angle_srv):
             df = tactile_data_to_df(df, time_data, image_data, tactile_data_0, tactile_data_1, track_angle_srv)
 
             #Naming convention is: <name>_<number of df>_<twist>_<gripperTwist>_<eeGroundRot>_<eeAirRot>_<gripperWidth>.csv
-            df.to_csv(str(FILE_DIR,OUTPUT_DIR,CSV_NAME,'_',num_df,'_',meta.gripperTwist,'_',meta.eeGroundRot,'_',meta.eeAirRot,'_',meta.gripperWidth,'.csv'), index=False)
+            data = [FILE_DIR,OUTPUT_DIR,CSV_NAME,'_',num_df,'_',meta.gripperTwist,'_',meta.eeGroundRot,'_',meta.eeAirRot,'_',meta.gripperWidth,'.csv']
+            df.to_csv(''.join(list(map(str, data))), index=False)
             num_df += 1
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
