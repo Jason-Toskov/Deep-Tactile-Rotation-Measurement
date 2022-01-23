@@ -19,13 +19,17 @@ class TactileDataset(Dataset):
         df = pd.read_csv('./' + self.datapoints[i])
         row, col = df.shape
         final_angle = df.iloc[-1:]['true_angle']
+
+        df_tensor = torch.Tensor(df.values).float()
         
-        if row >= self.max_seq_length:
-            df = df[:self.max_seq_length]
-        else:
-            padding = np.zeros((self.max_seq_length-row, col))
-            padding[:, -1] = final_angle
-            df = df.append
+        # if row >= self.max_seq_length:
+        #     df = df[:self.max_seq_length]
+        # else:
+        #     padding = np.zeros((self.max_seq_length-row, col))
+        #     padding[:, -1] = final_angle
+        #     df = df.append
+
+        return df_tensor[:,0:-1], df_tensor[:,-1]
         
         
 
