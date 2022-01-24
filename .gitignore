@@ -1,5 +1,8 @@
 colour_imgs/
 Dataset_usbc_box/
+Data/
+wandb/
+best_model.pt
 *.bag
 
 data_bags/
