@@ -119,7 +119,7 @@ class AngleDetector:
                 Quadrant.SW if rightmost_point == lowest_point else Quadrant.NW
             )
         elif self.state == Quadrant.NW:
-            print(rightmost_point, lowest_point, self.state, self.closest_state)
+            # print(rightmost_point, lowest_point, self.state, self.closest_state)
             if rightmost_point is not lowest_point:
                 self.state = self.closest_state
         elif self.state == Quadrant.SW:
