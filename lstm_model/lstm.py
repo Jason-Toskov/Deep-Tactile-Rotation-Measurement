@@ -118,7 +118,7 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 def main():
     lr = 1e-4
-    num_epochs = 1200
+    num_epochs = 10
     train_frac = 0.8
 
     wandb.config = {
@@ -169,11 +169,13 @@ def main():
         error_array_test.append(abs_error_test*90)
 
         wandb.log({
-            "loss/train":loss_train,
-            "loss/test":loss_test,
+            "Loss/train":loss_train,
+            "Loss/test":loss_test,
             "abs_error/train":abs_error_train*90,
             "abs_error/test":abs_error_test*90,
         })
+
+
 
         new_time = time.time()
         print("Epoch: %i, Absolute error: %f, Loss: %f, Time taken: %f" % (i, abs_error_train*90, loss_train, new_time-old_time) )
@@ -197,28 +199,34 @@ def main():
     train_loader = DataLoader(train_data, batch_size = 1, shuffle=True)
     test_loader = DataLoader(test_data, batch_size = 1, shuffle=True)
     # breakpoint()
-    
+    print('1')
     for ax in axs.flat:
         features, label = next(iter(train_loader))
-        while(max(label.squeeze())-min(label.squeeze()) < 5):
+        count = 0
+        while(max(label.squeeze())-min(label.squeeze()) < 5/90) and count < len(train_data):
             features, label = next(iter(train_loader))
+            count += 1
+
         out = best_model(features.to(device))
         out = out.squeeze()
         label = label.squeeze()
         x_range = [*range(len(out))]
         ax.plot(x_range, label.detach().to('cpu')*90, label = 'Ground truth')
         ax.plot(x_range, out.detach().to('cpu')*90, label = 'Prediction')
-    
+    print('2')
     fig.suptitle("Train examples")
     # os.chdir('..')
+    wandb.log({'Examples/Train': fig})
     plt.savefig('../../examples_train.png')
     plt.show()
 
     fig, axs = plt.subplots(2, 2)
     for ax in axs.flat:
         features, label = next(iter(test_loader))
-        while(max(label.squeeze())-min(label.squeeze()) < 5):
+        count = 0
+        while(max(label.squeeze())-min(label.squeeze()) < 5/90) and count < len(test_data):
             features, label = next(iter(test_loader))
+            count += 1
         out = best_model(features.to(device))
         out = out.squeeze()
         label = label.squeeze()
@@ -228,6 +236,7 @@ def main():
     
     fig.suptitle("Test examples")
     # os.chdir('..')
+    wandb.log({'Examples/Test': fig})
     plt.savefig('../../examples_test.png')
     plt.show()
     
