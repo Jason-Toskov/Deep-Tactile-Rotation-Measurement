@@ -19,8 +19,8 @@ from geometry_msgs.msg import PoseStamped, WrenchStamped, PoseArray
 from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as outputMsg, _Robotiq2FGripper_robot_input as inputMsg
 
 from grasp_executor.msg import DataCollectState
-from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg, gripper_position_msg
-from util import dist_to_guess, vector3ToNumpy, move_ur5
+from scripts.gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg, gripper_position_msg
+from scripts.util import dist_to_guess, vector3ToNumpy, move_ur5
 
 PI = np.pi
 

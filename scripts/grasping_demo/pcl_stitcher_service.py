@@ -11,8 +11,8 @@ from geometry_msgs.msg import PoseStamped
 import moveit_commander
 import moveit_msgs.msg
 from grasp_executor.srv import PCLStitch
-from util import move_ur5
-from grasp_2_boxes import State
+from scripts.util import move_ur5
+from scripts.grasping_demo.grasp_2_boxes import State
 
 import pdb
 

@@ -14,8 +14,8 @@ import moveit_msgs.msg
 from moveit_msgs.msg import DisplayTrajectory, MoveGroupActionFeedback
 from actionlib_msgs.msg import GoalStatusArray
 from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as outputMsg, _Robotiq2FGripper_robot_input as inputMsg
-from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg
-from util import dist_to_guess, vector3ToNumpy
+from scripts.gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg
+from scripts.util import dist_to_guess, vector3ToNumpy
 
 
 from pyquaternion import Quaternion
