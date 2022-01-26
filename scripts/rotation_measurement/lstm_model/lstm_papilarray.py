@@ -1,3 +1,4 @@
+from msilib.schema import Error
 import torch
 from torch import random
 import torch.nn as nn
@@ -9,8 +10,11 @@ import matplotlib.pyplot as plt
 import copy
 import time
 import wandb
-
-run = wandb.init(project="SRP")
+import argparse
+import sys
+import yaml
+from pathlib import Path
+from arg_set import parse_arguments
 
 class TactileDataset(Dataset):
     def __init__(self, path, mode=None, seq_length=None, label_scale = 1):
@@ -111,110 +115,95 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 
 def main():
-    resume_from_checkpoint = True
-    test_only = True
-    model_path = './results/best_model.pt'
+    # Parse args
+    args = parse_arguments()
     
-    lr = 1e-4
-    weight_decay = 1e-4
-    num_epochs = 10
-    train_frac = 0.8
-    batch_size = 1
+    # Check if sweeping or using default config
+    if len(sys.argv) == 1:
+        config_file = args.config
+        with open(config_file, 'r') as f:
+            cfg_input = yaml.safe_load(f) 
+    elif len(sys.argv) > 1:
+        del args.config
+        cfg_input = args
+    else:
+        raise ValueError("Weird arg error")
     
-    # CHANGE BACK TO -2 IN DATASET WHEN RAN W/ PROPER DATA
-    num_features = 142
-    hidden_size = 200
-    num_layers = 2
-    dropout = 0.2
-    
-    data_path = './Data/'
-    plot_path = './results/'
-    label_scale = 90
-
-    wandb.config = {
-        "learning_rate": lr,
-        "weight_decay": weight_decay,
-        "epochs": num_epochs,
-        "train_fraction": train_frac,
-        "batch_size": batch_size,
-        "num_features": num_features,
-        "hidden_size":hidden_size,
-        "num_layers":num_layers,
-        "dropout":dropout,
-        "label_scale":label_scale,
-    }
+    run = wandb.init(project="SRP", config=cfg_input)
+    config = wandb.config
+    print(config)
     
     #Set device to GPU_indx if GPU is avaliable
     GPU_indx = 0
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(data_path, label_scale = label_scale)
-    train_data_length = round(len(data)*train_frac)
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"])
+    train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
 
-    train_loader = DataLoader(train_data, batch_size = batch_size, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size = batch_size, shuffle=True)
+    train_loader = DataLoader(train_data, batch_size = config["batch_size"], shuffle=True)
+    test_loader = DataLoader(test_data, batch_size = config["batch_size"], shuffle=True)
     
     # Create model
-    model = RegressionLSTM(device, num_features, hidden_size, num_layers, dropout)
-    if resume_from_checkpoint:
-        model.load_state_dict(torch.load(model_path))
+    model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
+    if config["resume_from_checkpoint"]:
+        model.load_state_dict(torch.load(config["model_path"]))
     model = model.to(device)
     
     # Define loss and optimization functions
     loss_func = nn.MSELoss()
     l1loss = nn.L1Loss()
     
-    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optim = torch.optim.Adam(model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"])
     
     
-    if test_only:
+    if config["test_only"]:
         loss_train, abs_error_train = test(device, train_loader, model, loss_func, optim, l1loss)
         loss_test, abs_error_test = test(device, test_loader, model, loss_func, optim, l1loss)
         wandb.log({
                 "Loss/train":loss_train,
                 "Loss/test":loss_test,
-                "abs_error/train":abs_error_train*label_scale,
-                "abs_error/test":abs_error_test*label_scale,
+                "abs_error/train":abs_error_train*config["label_scale"],
+                "abs_error/test":abs_error_test*config["label_scale"],
             })
-        print('Train error: %f, Train loss: %f, Test error: %f, Test loss: %f'%(abs_error_train*label_scale, loss_train, abs_error_test*label_scale, loss_test))
+        print('Train error: %f, Train loss: %f, Test error: %f, Test loss: %f'%(abs_error_train*config["label_scale"], loss_train, abs_error_test*config["label_scale"], loss_test))
     else:
         # Run training
         best_model = copy.deepcopy(model)
         lowest_error = 1e5
         old_time = time.time()
-        for i in range(num_epochs):
+        for i in range(config["num_epochs"]):
             loss_train, abs_error_train = train(device, train_loader, model, loss_func, optim, l1loss)
             loss_test, abs_error_test = test(device, test_loader, model, loss_func, optim, l1loss)
 
             wandb.log({
                 "Loss/train":loss_train,
                 "Loss/test":loss_test,
-                "abs_error/train":abs_error_train*label_scale,
-                "abs_error/test":abs_error_test*label_scale,
+                "abs_error/train":abs_error_train*config["label_scale"],
+                "abs_error/test":abs_error_test*config["label_scale"],
             })
 
             new_time = time.time()
-            print("Epoch: %i, Test error: %f, Test loss: %f, Time taken: %.2f sec/epoch" % (i, abs_error_test*label_scale, loss_test, new_time-old_time) )
+            print("Epoch: %i, Test error: %f, Test loss: %f, Time taken: %.2f sec/epoch" % (i, abs_error_test*config["label_scale"], loss_test, new_time-old_time) )
             old_time = copy.deepcopy(new_time)
             if abs_error_test < lowest_error:
                 best_model_dict = copy.deepcopy(model.state_dict())
-                torch.save(best_model_dict, model_path)
+                torch.save(best_model_dict, config["model_path"])
                 lowest_error = abs_error_test
                 print("new best!")
         
-        print("Lowest error was: %f"%(lowest_error*label_scale))
+        print("Lowest error was: %f"%(lowest_error*config["label_scale"]))
         
         artifact = wandb.Artifact('model', type='model')
-        artifact.add_file(model_path) 
+        artifact.add_file(config["model_path"]) 
         run.log_artifact(artifact)
         # run.join()  
     
     #Load best model
-    best_model = RegressionLSTM(device, num_features, hidden_size, num_layers, dropout)
-    best_model.load_state_dict(torch.load(model_path))
+    best_model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
+    best_model.load_state_dict(torch.load(config["model_path"]))
     best_model = best_model.to(device)
     
     #Refresh loaders
@@ -226,7 +215,7 @@ def main():
     for ax in axs.flat:
         features, label = next(iter(train_loader))
         count = 0
-        while(max(label.squeeze())-min(label.squeeze()) < 5/label_scale) and count < len(train_data):
+        while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(train_data):
             features, label = next(iter(train_loader))
             count += 1
 
@@ -234,8 +223,8 @@ def main():
         out = out.squeeze()
         label = label.squeeze()
         x_range = [*range(len(out))]
-        ax.plot(x_range, label.detach().to('cpu')*label_scale, label = 'Ground truth')
-        ax.plot(x_range, out.detach().to('cpu')*label_scale, label = 'Prediction')
+        ax.plot(x_range, label.detach().to('cpu')*config["label_scale"], label = 'Ground truth')
+        ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
     fig.suptitle("Train examples")
     wandb.log({'Examples\\Train': fig})
     # plt.savefig(plot_path + 'examples_train.png')
@@ -245,15 +234,15 @@ def main():
     for ax in axs.flat:
         features, label = next(iter(test_loader))
         count = 0
-        while(max(label.squeeze())-min(label.squeeze()) < 5/label_scale) and count < len(test_data):
+        while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(test_data):
             features, label = next(iter(test_loader))
             count += 1
         out = best_model(features.to(device))
         out = out.squeeze()
         label = label.squeeze()
         x_range = [*range(len(out))]
-        ax.plot(x_range, label.detach().to('cpu')*label_scale, label = 'Ground truth')
-        ax.plot(x_range, out.detach().to('cpu')*label_scale, label = 'Prediction')
+        ax.plot(x_range, label.detach().to('cpu')*config["label_scale"], label = 'Ground truth')
+        ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
     
     fig.suptitle("Test examples")
     wandb.log({'Examples\\Test': fig})

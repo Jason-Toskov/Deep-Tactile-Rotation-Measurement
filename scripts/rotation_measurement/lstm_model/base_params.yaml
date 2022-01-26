@@ -1,0 +1,20 @@
+resume_from_checkpoint: False
+test_only: False
+model_path: './results/best_model.pt'
+
+num_epochs: 10
+learning_rate: 0.0001
+weight_decay: 0.0001
+train_frac: 0.8
+batch_size: 1
+
+num_features: 142
+hidden_size: 200
+num_layers: 2
+dropout: 0.2
+
+data_path: './Data/'
+plot_path: './results/'
+label_scale: 90
+
+
