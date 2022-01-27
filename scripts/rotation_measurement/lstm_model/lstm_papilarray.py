@@ -1,4 +1,3 @@
-from msilib.schema import Error
 import torch
 from torch import random
 import torch.nn as nn
@@ -38,7 +37,7 @@ class TactileDataset(Dataset):
             pass # Can do some other stuff here
         
         # -2 because the time step is ignored
-        return df_tensor[:,0:-1], (df_tensor[:,-1] - df_tensor[0, -1])/self.label_scale
+        return df_tensor[:,0:-2], (df_tensor[:,-2] - df_tensor[0, -2])/self.label_scale
         
         
 
@@ -226,7 +225,7 @@ def main():
         ax.plot(x_range, label.detach().to('cpu')*config["label_scale"], label = 'Ground truth')
         ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
     fig.suptitle("Train examples")
-    wandb.log({'Examples\\Train': fig})
+    wandb.log({'Examples/Train': fig})
     # plt.savefig(plot_path + 'examples_train.png')
     # plt.show()
 
@@ -245,7 +244,7 @@ def main():
         ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
     
     fig.suptitle("Test examples")
-    wandb.log({'Examples\\Test': fig})
+    wandb.log({'Examples/Test': fig})
     # plt.savefig(plot_path + 'examples_train.png')
     # plt.show()
     

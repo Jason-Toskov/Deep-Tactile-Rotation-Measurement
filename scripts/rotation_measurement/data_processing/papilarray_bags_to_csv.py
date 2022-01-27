@@ -16,11 +16,6 @@ CSV_NAME = 'data'
 BAG_DIR = 'recorded_data_bags/'
 OUTPUT_DIR = 'recorded_data_csvs/'
 
-if not os.path.exists(OUTPUT_DIR):
-    # Create a new directory because it does not exist 
-  os.makedirs(OUTPUT_DIR)
-  print("The new directory is created!")
-
 def init_df(df):
     cols_sensor = ['gfX', 'gfY', 'gfZ', 'gtX', 'gtY', 'gtZ', 'friction_est', 'target_grip_force']
     cols_pillar = ['dX', 'dY', 'dZ', 'fX', 'fY', 'fZ', 'in_contact']
@@ -110,6 +105,11 @@ def main(track_angle_srv, reset_angle_srv):
         reset_angle_srv()
         
 if __name__ == "__main__":
+    if not os.path.exists(OUTPUT_DIR):
+        # Create a new directory because it does not exist 
+        os.makedirs(OUTPUT_DIR)
+        print("The new directory is created!")
+
     rospy.wait_for_service('track_angle')
     try:
         track_angle_srv = rospy.ServiceProxy('track_angle', AngleTrack)
