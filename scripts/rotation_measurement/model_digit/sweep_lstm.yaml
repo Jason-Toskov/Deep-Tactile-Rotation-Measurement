@@ -1,0 +1,44 @@
+program: lstm_papilarray.py
+method: bayes
+metric:
+  name: abs_error/test
+  goal: minimize
+parameters:
+  resume_from_checkpoint: 
+    value: False
+  test_only: 
+    value: False
+  model_path: 
+    value: './results/best_model.pt'
+
+  num_epochs: 
+    value: 500
+  learning_rate: 
+    values: [0.001, 0.0001, 0.00001]
+  weight_decay: 
+    values: [0.0001, 0.00001, 0]
+  train_frac: 
+    value: 0.8
+  batch_size: 
+    value: 1
+
+  num_features: 
+    value: 142
+  hidden_size: 
+    values: [16, 64, 128, 256]
+  num_layers: 
+    values: [1, 2, 3]
+  dropout: 
+    values: [0.3, 0.2, 0.1]
+
+  data_path: 
+    value: './Data/'
+  plot_path: 
+    value: './results/'
+  label_scale: 
+    value: 90
+
+entity: manetheren_personal
+project: SRP
+
+
