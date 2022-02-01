@@ -20,8 +20,8 @@ class DataBagger:
     def __init__(self):
         rospy.init_node("Data_bagger", anonymous=True)
 
-        self.use_papilarray = True
-        self.digit_serials = ['d20228', 'd20228']
+        self.use_papilarray = False
+        self.digit_serials = ['D20235', 'D20226']
 
         self.image_topic = "/realsense/rgb"
         self.current_image = 0
@@ -111,6 +111,10 @@ class DataBagger:
                                 d0frame = d0.get_frame()
                                 d1frame = d1.get_frame()
 
+                                # cv2.imshow("d0frame", d0frame)
+                                # cv2.imshow("d1frame", d0frame)
+
+
                                 d0msg = bridge.cv2_to_imgmsg(d0frame)
                                 d1msg = bridge.cv2_to_imgmsg(d1frame)
 
@@ -119,6 +123,9 @@ class DataBagger:
                             header.stamp = time_now
                             cv_image = bridge.cv2_to_imgmsg(inRgb)
                             
+                            # cv2.imshow("angle", inRgb)
+                            # cv2.waitKey(1)
+
                             if self.use_papilarray:
                                 if prev_0 == self.tactile_data_0[0]:
                                     print("uh oh repeated data")

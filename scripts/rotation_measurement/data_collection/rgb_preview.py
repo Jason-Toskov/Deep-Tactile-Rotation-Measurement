@@ -40,6 +40,10 @@ class DataBagger:
         # Define source and output
         camRgb = pipeline.create(dai.node.ColorCamera)
         xoutRgb = pipeline.create(dai.node.XLinkOut)
+        controlIn = pipeline.create(dai.node.XLinkIn)
+
+        controlIn.setStreamName('control')
+        controlIn.out.link(camRgb.inputControl)
 
         xoutRgb.setStreamName("rgb")
 
@@ -48,6 +52,8 @@ class DataBagger:
         camRgb.setInterleaved(False)
         camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
         camRgb.setFps(60)
+
+
 
         # Linking
         prev_0 = 0
@@ -62,9 +68,17 @@ class DataBagger:
             # Print out usb speed
             print('Usb speed: ', device.getUsbSpeed().name)
 
+            controlQueue = device.getInputQueue('control')
+            ctrl = dai.CameraControl()
+            ctrl.setManualFocus(132)
+            controlQueue.send(ctrl)
+
+
             # Output queue will be used to get the rgb frames from the output defined above
             qRgb = device.getOutputQueue(name="rgb", maxSize=1, blocking=False)
             t1 = timeit.default_timer()
+
+
 
 
             # bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
