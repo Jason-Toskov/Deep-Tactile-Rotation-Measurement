@@ -20,6 +20,7 @@ from PIL import Image
 from pytouch import PyTouchZoo, sensors
 from pytouch.models.touch_detect import TouchDetectModel
 from torchvision import models
+from tqdm import tqdm
 
 from arg_set import parse_arguments
 
@@ -64,7 +65,7 @@ class DigitDataset(Dataset):
         tensor_right = torch.stack(data_right)
         
         df_tensor = torch.Tensor(df.values).float()
-        breakpoint()
+        # breakpoint()
         
         return tensor_left, tensor_right, (df_tensor[:,0] - df_tensor[0, 0])/self.label_scale
 
@@ -81,13 +82,18 @@ class RegressionLSTM(nn.Module):
             "touchdetect_resnet", sensors.DigitSensor
         )
         # self.touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
-        self.res = models.resnet18()
-        self.res.fc = nn.Linear(self.res.fc.in_features, 2)
-        self.res.load_state_dict(touch_detect_model_dict)
-        self.res.fc = nn.Linear(self.res.fc.in_features, self.num_features)
+        self.res_L = models.resnet18()
+        self.res_L.fc = nn.Linear(self.res_L.fc.in_features, 2)
+        self.res_L.load_state_dict(touch_detect_model_dict)
+        self.res_L.fc = nn.Linear(self.res_L.fc.in_features, self.num_features)
+        
+        self.res_R = models.resnet18()
+        self.res_R.fc = nn.Linear(self.res_R.fc.in_features, 2)
+        self.res_R.load_state_dict(touch_detect_model_dict)
+        self.res_R.fc = nn.Linear(self.res_R.fc.in_features, self.num_features)
         
         self.lstm = nn.LSTM(
-            input_size = self.num_features,
+            input_size = 2*(self.num_features//2),
             hidden_size = self.hidden_size,
             batch_first = True,
             num_layers = self.num_layers,
@@ -96,20 +102,29 @@ class RegressionLSTM(nn.Module):
         
         self.linear = nn.Linear(in_features=self.hidden_size, out_features=1)
         
-    def forward(self, x):
-        batch_size = x.shape[0]
+    def forward(self, x1, x2):
+        batch_size = x1.shape[0]
         h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
         c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+        # print('step 1')
         
-        x = torch.squeeze(x, 0)
+        # x1 = torch.squeeze(x1, 0)
+        x2 = torch.squeeze(x2, 0)
         #Out is size (seq, feat)
-        res_out = self.res(x)
+        # res_out_L = self.res_L(x1)
+        res_out_R = self.res_R(x2)
+        # print('step 2')
+        
+        # res_out_final =  torch.cat((res_out_L, res_out_R), dim=1)
         #Add in a batch dimension
-        res_out = torch.unsqueeze(res_out, 0)        
+        res_out = torch.unsqueeze(res_out_R, 0)    
+        # print('step 3')    
         #out is size (batch, seq, feat*layers) for batch_first=True
         out, (hn, cn) = self.lstm(res_out, (h0, c0))
+        # print('step 4')
         #Fold the bacth and seq dimensions together, so each sequence will be basically like a batch element
         out = self.linear(out.view(-1, out.size(2)))
+        # print('step 5')
         return out
     
 def train(device, loader, model, loss_func, optim, l1loss):
@@ -117,8 +132,9 @@ def train(device, loader, model, loss_func, optim, l1loss):
     loss_count = 0
     abs_error_count = 0
     
-    for i, (features, label) in enumerate(loader):
-        out = model(features.to(device))
+    for i, (features1, features2, label) in enumerate(loader):
+        print(features1.size())
+        out = model(features1.to(device), features2.to(device).to(device))
         loss = loss_func(out.squeeze(), label.to(device).squeeze())
         l1error = l1loss(out.squeeze(), label.to(device).squeeze())
         
@@ -141,8 +157,8 @@ def test(device, loader, model, loss_func, optim, l1loss):
     abs_error_count = 0
 
     with torch.no_grad():
-        for i, (features, label) in enumerate(loader):
-            out = model(features.to(device))
+        for i, (features1, features2, label) in tqdm(enumerate(loader)):
+            out = model(features1.to(device), features2.to(device))
             loss = loss_func(out.squeeze(), label.to(device).squeeze())
             l1error = l1loss(out.squeeze(), label.to(device).squeeze())
             
@@ -186,30 +202,32 @@ def main():
 
     train_loader = DataLoader(train_data, batch_size = config["batch_size"], shuffle=True)
     test_loader = DataLoader(test_data, batch_size = config["batch_size"], shuffle=True)
+    print('Data loaders created')
     
-    pytouch_zoo = PyTouchZoo()
-    available_models = pytouch_zoo.list_models()
-    print(available_models)
+    # pytouch_zoo = PyTouchZoo()
+    # available_models = pytouch_zoo.list_models()
+    # print(available_models)
     
-    # load DIGIT sensor touch detect model from pytouch zoo
-    # This is a state dict for the TouchDetectModel
-    # Code should go into lstm initialization
-    # will want to collapse the seq batch dimension into the batch dimension (somehow?)
-    touch_detect_model_dict = pytouch_zoo.load_model_from_zoo(  # noqa: F841
-        "touchdetect_resnet", sensors.DigitSensor
-    )
+    # # load DIGIT sensor touch detect model from pytouch zoo
+    # # This is a state dict for the TouchDetectModel
+    # # Code should go into lstm initialization
+    # # will want to collapse the seq batch dimension into the batch dimension (somehow?)
+    # touch_detect_model_dict = pytouch_zoo.load_model_from_zoo(  # noqa: F841
+    #     "touchdetect_resnet", sensors.DigitSensor
+    # )
     
-    touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
+    # touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
 
-    x,y,z = next(iter(train_loader))
+    # x,y,z = next(iter(train_loader))
     
-    res_output = touch_model(x.squeeze())
-    breakpoint()
+    # res_output = touch_model(x.squeeze())
+    # breakpoint()
     
     # Create model
     model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
+    print('Model created')
     
-    breakpoint()
+    # breakpoint()
     if config["resume_from_checkpoint"]:
         model.load_state_dict(torch.load(config["model_path"]))
     model = model.to(device)
@@ -236,7 +254,9 @@ def main():
         best_model = copy.deepcopy(model)
         lowest_error = 1e5
         old_time = time.time()
+        print('Training began')
         for i in range(config["num_epochs"]):
+            print(str(i))
             loss_train, abs_error_train = train(device, train_loader, model, loss_func, optim, l1loss)
             loss_test, abs_error_test = test(device, test_loader, model, loss_func, optim, l1loss)
 
@@ -267,6 +287,7 @@ def main():
     best_model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
     best_model.load_state_dict(torch.load(config["model_path"]))
     best_model = best_model.to(device)
+    
     
     #Refresh loaders
     train_loader = DataLoader(train_data, batch_size = 1, shuffle=True)
