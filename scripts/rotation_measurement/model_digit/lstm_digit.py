@@ -19,6 +19,7 @@ import torchvision.transforms.functional as F
 from PIL import Image
 from pytouch import PyTouchZoo, sensors
 from pytouch.models.touch_detect import TouchDetectModel
+from torchvision import models
 
 from arg_set import parse_arguments
 
@@ -75,6 +76,16 @@ class RegressionLSTM(nn.Module):
         self.num_layers = num_layers
         self.device = device
         
+        pytouch_zoo = PyTouchZoo()
+        touch_detect_model_dict = pytouch_zoo.load_model_from_zoo(  # noqa: F841
+            "touchdetect_resnet", sensors.DigitSensor
+        )
+        # self.touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
+        self.res = models.resnet18()
+        self.res.fc = nn.Linear(self.res.fc.in_features, 2)
+        self.res.load_state_dict(touch_detect_model_dict)
+        self.res.fc = nn.Linear(self.res.fc.in_features, self.num_features)
+        
         self.lstm = nn.LSTM(
             input_size = self.num_features,
             hidden_size = self.hidden_size,
@@ -90,8 +101,13 @@ class RegressionLSTM(nn.Module):
         h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
         c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
         
+        x = torch.squeeze(x, 0)
+        #Out is size (seq, feat)
+        res_out = self.res(x)
+        #Add in a batch dimension
+        res_out = torch.unsqueeze(res_out, 0)        
         #out is size (batch, seq, feat*layers) for batch_first=True
-        out, (hn, cn) = self.lstm(x, (h0, c0))
+        out, (hn, cn) = self.lstm(res_out, (h0, c0))
         #Fold the bacth and seq dimensions together, so each sequence will be basically like a batch element
         out = self.linear(out.view(-1, out.size(2)))
         return out
@@ -192,6 +208,8 @@ def main():
     
     # Create model
     model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
+    
+    breakpoint()
     if config["resume_from_checkpoint"]:
         model.load_state_dict(torch.load(config["model_path"]))
     model = model.to(device)
