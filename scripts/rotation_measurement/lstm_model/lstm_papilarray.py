@@ -30,6 +30,7 @@ class TactileDataset(Dataset):
     
     def __getitem__(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
+        # print(self.datapoints[i], df.values)
         
         if self.seq_length is None:
             df_tensor = torch.Tensor(df.values).float()
@@ -38,7 +39,37 @@ class TactileDataset(Dataset):
         
         # -2 because the time step is ignored
         return df_tensor[:,0:-2], (df_tensor[:,-2] - df_tensor[0, -2])/self.label_scale
-        
+    
+    def collate_fn(self, batch):
+
+        # 0 is the data, 1 is GT
+        min_length = min(map(lambda x : x[0].shape[0], batch))
+
+        # https://www.geeksforgeeks.org/python-k-middle-elements/
+        K = min_length
+
+        torch_array = torch.zeros((len(batch), min_length, 142))
+        gt_array = torch.zeros((len(batch), min_length))        
+        # print(torch_array.shape)
+        # input()
+
+        for (index, (data, gt)) in enumerate(batch):
+
+            # computing strt, and end index 
+            strt_idx = (len(data) // 2) - (K // 2)
+            end_idx = (len(data) // 2) + (K // 2)
+            # print(data.shape, gt.shape)
+            # print(data_cropped.shape, gt_cropped.shape)
+            # print("cropped size", data[strt_idx: end_idx + 1, :].shape)
+            # slicing extracting middle elements
+            data_cropped = data[strt_idx: strt_idx + K, :]
+            gt_cropped = gt[strt_idx: strt_idx + K]
+            # print(data_cropped.shape, gt_cropped.shape)
+            # input()            
+            torch_array[index, :, :] = data_cropped
+            gt_array[index, :] = gt_cropped
+                
+        return torch_array, gt_array
         
 
 class RegressionLSTM(nn.Module):
@@ -60,15 +91,24 @@ class RegressionLSTM(nn.Module):
         self.linear = nn.Linear(in_features=self.hidden_size, out_features=1)
         
     def forward(self, x):
+        # print("x.shape", x.shape)
+        # input()
         batch_size = x.shape[0]
         h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
         c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
         
         #out is size (batch, seq, feat*layers) for batch_first=True
         out, (hn, cn) = self.lstm(x, (h0, c0))
-        #Fold the bacth and seq dimensions together, so each sequence will be basically like a batch element
-        out = self.linear(out.view(-1, out.size(2)))
+
+        # print(batch_size, h0.shape, c0.shape, out.shape, hn.shape, cn.shape)
+        # print(out.contiguous().view(-1, out.size(2)))
+        
+        #Fold the batch and seq dimensions together, so each sequence will be basically like a batch element
+        # out = self.linear(out.contiguous().view(-1, out.size(2)))
+        out = self.linear(out)
         return out
+    
+
     
 def train(device, loader, model, loss_func, optim, l1loss):
     model.train()
@@ -142,8 +182,8 @@ def main():
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
 
-    train_loader = DataLoader(train_data, batch_size = config["batch_size"], shuffle=True)
-    test_loader = DataLoader(test_data, batch_size = config["batch_size"], shuffle=True)
+    train_loader = DataLoader(train_data, batch_size = config["train_batch_size"], shuffle=True, collate_fn=data.collate_fn)
+    test_loader = DataLoader(test_data, batch_size = config["test_batch_size"], shuffle=True, collate_fn=data.collate_fn)
     
     # Create model
     model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
