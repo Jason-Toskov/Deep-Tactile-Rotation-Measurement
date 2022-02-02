@@ -38,7 +38,7 @@ class TactileDataset(Dataset):
             pass # Can do some other stuff here
         
         # -2 because the time step is ignored
-        return df_tensor[:,0:-2], (df_tensor[:,-2] - df_tensor[0, -2])/self.label_scale
+        return df_tensor[:,0:-2], df_tensor[:,-2] / self.label_scale
     
     def collate_fn(self, batch):
 
@@ -67,8 +67,12 @@ class TactileDataset(Dataset):
             # print(data_cropped.shape, gt_cropped.shape)
             # input()            
             torch_array[index, :, :] = data_cropped
-            gt_array[index, :] = gt_cropped
-                
+            gt_array[index, :] = (gt_cropped - gt_cropped[0])
+            # print((gt_cropped - gt_cropped[0]))
+            # print(gt_cropped)
+            # input()
+
+
         return torch_array, gt_array
         
 
@@ -79,7 +83,10 @@ class RegressionLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.device = device
-        
+
+        self.start_linear1 = nn.Linear(in_features=self.num_features, out_features=self.hidden_size)
+        self.start_linear2 = nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size)
+
         self.lstm = nn.LSTM(
             input_size = self.num_features,
             hidden_size = self.hidden_size,
@@ -88,24 +95,37 @@ class RegressionLSTM(nn.Module):
             dropout = dropout
         )
         
-        self.linear = nn.Linear(in_features=self.hidden_size, out_features=1)
+        self.output_linear = nn.Linear(in_features=self.hidden_size, out_features=1)
+
+    def init_model_state(self, batch_size):
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+        return (h0, c0)
         
     def forward(self, x):
         # print("x.shape", x.shape)
         # input()
+        
         batch_size = x.shape[0]
-        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
-        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+
+        h0, c0 = self.init_model_state(batch_size)
+        # x = self.start_linear1(x)
+        # x = self.start_linear2(x)
+
+        # print(x.shape, h0.shape, c0.shape)
+
         
         #out is size (batch, seq, feat*layers) for batch_first=True
-        out, (hn, cn) = self.lstm(x, (h0, c0))
+        out, hidden = self.lstm(x, (h0, c0))
+
+        # out = out[:, -1, :]
 
         # print(batch_size, h0.shape, c0.shape, out.shape, hn.shape, cn.shape)
         # print(out.contiguous().view(-1, out.size(2)))
         
         #Fold the batch and seq dimensions together, so each sequence will be basically like a batch element
         # out = self.linear(out.contiguous().view(-1, out.size(2)))
-        out = self.linear(out)
+        out = self.output_linear(out)
         return out
     
 
@@ -117,16 +137,18 @@ def train(device, loader, model, loss_func, optim, l1loss):
     
     for i, (features, label) in enumerate(loader):
         out = model(features.to(device))
+        # print(out.shape, label.shape)
         loss = loss_func(out.squeeze(), label.to(device).squeeze())
-        l1error = l1loss(out.squeeze(), label.to(device).squeeze())
         
         loss_count += loss.item()
-        abs_error_count += l1error.item()
         
         optim.zero_grad()
         loss.backward()
         optim.step()
         
+        l1error = l1loss(out.squeeze(), label.to(device).squeeze())
+        abs_error_count += l1error.item()        
+
     loss_count /= i+1
     abs_error_count /= i+1
     
@@ -250,7 +272,7 @@ def main():
     test_loader = DataLoader(test_data, batch_size = 1, shuffle=True)
         
     #plot that shows labels/out of some sequences
-    fig, axs = plt.subplots(2, 2)
+    fig, axs = plt.subplots(10, 10)
     for ax in axs.flat:
         features, label = next(iter(train_loader))
         count = 0
