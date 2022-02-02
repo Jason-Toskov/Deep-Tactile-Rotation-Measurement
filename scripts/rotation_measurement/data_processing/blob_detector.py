@@ -32,7 +32,7 @@ class AngleDetectorService:
         rospy.init_node("Angle_detector")
         # self.image_topic = "/realsense/rgb"
 
-        self.AD = AngleDetector(writeImages=True, showImages=False, cv2Image=False)
+        self.AD = AngleDetector(writeImages=True, showImages=True, cv2Image=False)
         # self.current_image = None
         # rospy.Subscriber(self.image_topic, Image, self.image_callback)
         rospy.Service("track_angle", AngleTrack, self.update_angle)
@@ -42,6 +42,7 @@ class AngleDetectorService:
         rospy.spin()
 
     def update_angle(self, req):
+        # print(dir(req))
         return self.AD.update_angle(req.im)
 
     def reset_tracking(self, req):

@@ -19,8 +19,12 @@ from geometry_msgs.msg import PoseStamped, WrenchStamped, PoseArray
 from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as outputMsg, _Robotiq2FGripper_robot_input as inputMsg
 
 from grasp_executor.msg import DataCollectState
-from scripts.gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg, gripper_position_msg
-from scripts.util import dist_to_guess, vector3ToNumpy, move_ur5
+
+import sys
+sys.path.append('/home/acrv/new_ws/src/grasp_executor/scripts')
+
+from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg, gripper_position_msg
+from util import dist_to_guess, vector3ToNumpy, move_ur5
 
 PI = np.pi
 
@@ -38,10 +42,10 @@ class RotationMeasurer():
         self.gripper_data = 0
 
         # self.grasp_loc_pose = self.set_pose("base_link",-0.5506,  0.0973, 0.0700,  0.4969, 0.5030, -0.4922, 0.5076)
-        self.grasp_loc_pose = self.set_pose("base_link", -0.4, 0.0973, 0.07, 0.4969, 0.5030, -0.4922, 0.5076)
+        self.grasp_loc_pose = self.set_pose("base_link", -0.4, 0.0973, 0.08, 0.4969, 0.5030, -0.4922, 0.5076)
 
         self.grasp_loc_offset_pose = copy.deepcopy(self.grasp_loc_pose)
-        self.offset_z = 0.2
+        self.offset_z = 0.23 + 0.15
         self.grasp_loc_offset_pose.pose.position.z += self.offset_z
 
 
@@ -59,13 +63,13 @@ class RotationMeasurer():
 
         ### Gripped width code
 
-        self.close_width = 175###
+        self.close_width = 222###
 
-        self.loosest_grasp = 160
-        self.tightest_grasp = 165
+        self.loosest_grasp = 215
+        self.tightest_grasp = 217
         self.num_step = 2
 
-        self.skip_count = 174
+        self.skip_count = 173
         self.collect_data = True
 
          #### Rospy startups ####
@@ -140,7 +144,7 @@ class RotationMeasurer():
         rospy.loginfo("Gripper active")
 
         # Go to move home position using joint definition
-        self.move_to_joint_position(self.move_home_joints)
+        # self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.1)
         rospy.loginfo("Moved to Home Position")
         count = 0
@@ -236,6 +240,8 @@ class RotationMeasurer():
                             collection_info.eeAirRot = round(air_angle_peturb/PI*180)
                             collection_info.gripperWidth = width
                             self.collect_data_pub.publish(collection_info)
+
+                            rospy.sleep(.5)
 
                             #Loosen gripper
                             self.command_gripper(gripper_position_msg(width))
