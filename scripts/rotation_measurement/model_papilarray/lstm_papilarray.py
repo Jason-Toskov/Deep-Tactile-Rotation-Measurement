@@ -48,6 +48,12 @@ class TactileDataset(Dataset):
     
     def __len__(self):
         return len(self.datapoints)
+
+    def strechAngle(self, x):
+        if self.normalize:
+            return self.scale(x, out_range=(self.angleLimits(True), self.angleLimits(False)))
+        else:
+            return x * self.label_scale
     
     def scale(self, x, out_range=(-1, 1), domain=(-1, 1)):
         
@@ -63,6 +69,9 @@ class TactileDataset(Dataset):
     def getItem(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
         return df.values
+
+    def angleLimits(self, min=True):
+        return self.min_values[:-2] if min else self.max_values[:-2]
 
     def __getitem__(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
@@ -320,10 +329,10 @@ def main():
         wandb.log({
                 "Loss/train":loss_train,
                 "Loss/test":loss_test,
-                "abs_error/train":abs_error_train*config["label_scale"],
-                "abs_error/test":abs_error_test*config["label_scale"],
+                "abs_error/train":data.strechAngle(abs_error_train),
+                "abs_error/test":data.strechAngle(abs_error_test),
             })
-        print('Train error: %f, Train loss: %f, Test error: %f, Test loss: %f'%(abs_error_train*config["label_scale"], loss_train, abs_error_test*config["label_scale"], loss_test))
+        print('Train error: %f, Train loss: %f, Test error: %f, Test loss: %f'%(data.strechAngle(abs_error_train), loss_train, data.strechAngle(abs_error_test), loss_test))
     else:
         # Run training
         best_model = copy.deepcopy(model)
@@ -336,12 +345,12 @@ def main():
             wandb.log({
                 "Loss/train":loss_train,
                 "Loss/test":loss_test,
-                "abs_error/train":abs_error_train*config["label_scale"],
-                "abs_error/test":abs_error_test*config["label_scale"],
+                "abs_error/train":data.strechAngle(abs_error_train),
+                "abs_error/test":data.strechAngle(abs_error_test),
             })
 
             new_time = time.time()
-            print("Epoch: %i, Test error: %f, Test loss: %f, Time taken: %.2f sec/epoch" % (i, abs_error_test*config["label_scale"], loss_test, new_time-old_time) )
+            print("Epoch: %i, Test error: %f, Test loss: %f, Time taken: %.2f sec/epoch" % (i, data.strechAngle(abs_error_test), loss_test, new_time-old_time) )
             old_time = copy.deepcopy(new_time)
             if abs_error_test < lowest_error:
                 best_model_dict = copy.deepcopy(model.state_dict())
@@ -349,7 +358,7 @@ def main():
                 lowest_error = abs_error_test
                 print("new best!")
         
-        print("Lowest error was: %f"%(lowest_error*config["label_scale"]))
+        print("Lowest error was: %f"%(data.strechAngle(lowest_error)))
         
         artifact = wandb.Artifact('model', type='model')
         artifact.add_file(config["model_path"]) 
@@ -378,8 +387,8 @@ def main():
         out = out.squeeze()
         label = label.squeeze()
         x_range = [*range(len(out))]
-        ax.plot(x_range, label.detach().to('cpu')*config["label_scale"], label = 'Ground truth')
-        ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
+        ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
+        ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
     fig.suptitle("Train examples")
     wandb.log({'Examples/Train': fig})
     # plt.savefig(plot_path + 'examples_train.png')
@@ -396,8 +405,8 @@ def main():
         out = out.squeeze()
         label = label.squeeze()
         x_range = [*range(len(out))]
-        ax.plot(x_range, label.detach().to('cpu')*config["label_scale"], label = 'Ground truth')
-        ax.plot(x_range, out.detach().to('cpu')*config["label_scale"], label = 'Prediction')
+        ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
+        ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
     
     fig.suptitle("Test examples")
     wandb.log({'Examples/Test': fig})
