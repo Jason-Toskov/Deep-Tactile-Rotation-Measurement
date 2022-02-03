@@ -62,8 +62,8 @@ class TactileDataset(Dataset):
         else:
             K = self.seq_length
 
-        torch_array = torch.zeros((len(batch), min_length, 142))
-        gt_array = torch.zeros((len(batch), min_length))        
+        torch_array = torch.zeros((len(batch), K, 142))
+        gt_array = torch.zeros((len(batch), K))        
         # print(torch_array.shape)
         # input()   
 
@@ -79,7 +79,8 @@ class TactileDataset(Dataset):
                 strt_idx = 0
             elif self.sample_type == SampleType.RANDOM:
                 max_start_value = len(data) - K
-                strt_idx = random.randint(0, max_start_value-1)
+                # print()
+                strt_idx = random.randrange(0, max_start_value+1, 1)
             else:
                 ValueError('Invalid sample type')
             # print(data.shape, gt.shape)
@@ -212,7 +213,8 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 
 def main():
-    sample_type = SampleType.FRONT
+    sample_type = SampleType.RANDOM
+    seq_length = 15
 
     # Parse args
     args = parse_arguments()
@@ -239,7 +241,7 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type)
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length)
     train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
