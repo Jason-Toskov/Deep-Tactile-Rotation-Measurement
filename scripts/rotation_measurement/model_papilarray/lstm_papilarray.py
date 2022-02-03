@@ -51,7 +51,7 @@ class TactileDataset(Dataset):
         torch_array = torch.zeros((len(batch), min_length, 142))
         gt_array = torch.zeros((len(batch), min_length))        
         # print(torch_array.shape)
-        # input()
+        # input()   
 
         for (index, (data, gt)) in enumerate(batch):
 
@@ -122,10 +122,15 @@ class RegressionLSTM(nn.Module):
 
         # print(batch_size, h0.shape, c0.shape, out.shape, hn.shape, cn.shape)
         # print(out.contiguous().view(-1, out.size(2)))
-        
+        # print(out.shape)
         #Fold the batch and seq dimensions together, so each sequence will be basically like a batch element
         # out = self.linear(out.contiguous().view(-1, out.size(2)))
+        # print(out.shape)
+
         out = self.output_linear(out)
+
+        # print(out.shape)
+
         return out
     
 
@@ -190,7 +195,9 @@ def main():
     else:
         raise ValueError("Weird arg error")
     
-    run = wandb.init(project="SRP", config=cfg_input)
+
+    run = wandb.init(project="LSTM_papilarray", entity="deep-tactile-rotatation-estimation", config=cfg_input)
+    # run = wandb.init(project="SRP", config=cfg_input)
     config = wandb.config
     print(config)
     
@@ -268,8 +275,8 @@ def main():
     best_model = best_model.to(device)
     
     #Refresh loaders
-    train_loader = DataLoader(train_data, batch_size = 1, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size = 1, shuffle=True)
+    train_loader = DataLoader(train_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
+    test_loader = DataLoader(test_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
         
     #plot that shows labels/out of some sequences
     fig, axs = plt.subplots(10, 10)
@@ -291,7 +298,7 @@ def main():
     # plt.savefig(plot_path + 'examples_train.png')
     # plt.show()
 
-    fig, axs = plt.subplots(2, 2)
+    fig, axs = plt.subplots(10, 10)
     for ax in axs.flat:
         features, label = next(iter(test_loader))
         count = 0
