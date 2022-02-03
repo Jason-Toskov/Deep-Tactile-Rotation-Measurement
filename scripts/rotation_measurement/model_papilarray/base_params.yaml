@@ -10,14 +10,13 @@ train_frac: 0.8
 train_batch_size: 5
 test_batch_size: 1
 
-num_features: 142
 hidden_size: 400
 num_layers: 6
 dropout: 0.3
 
-data_path: './Ruler_data/'
+data_path: './Data/'
 plot_path: './results/'
 label_scale: 90
-normalize: False
+normalize: True
 
 
