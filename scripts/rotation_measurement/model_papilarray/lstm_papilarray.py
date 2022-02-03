@@ -35,10 +35,10 @@ class TactileDataset(Dataset):
         self.seq_length = seq_length
         self.label_scale = label_scale
         self.normalize = normalize
-        self.keep_index = np.load("keep_index.npy")
         if normalize:
             self.max_values = np.load("max_values.npy")
             self.min_values = np.load("min_values.npy")
+            self.keep_index = np.load("keep_index.npy")
 
             self.min_angle = -119.604454
             self.max_angle = 167.61925
@@ -66,7 +66,10 @@ class TactileDataset(Dataset):
 
     def __getitem__(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
-        true_values = np.take(df.values, self.keep_index.squeeze(), axis=1)
+        if self.normalize:
+            true_values = np.take(df.values, self.keep_index.squeeze(), axis=1)
+        else:
+            true_values = df.values
 
         angle = None
         df_tensor = None        
@@ -99,13 +102,14 @@ class TactileDataset(Dataset):
         # https://www.geeksforgeeks.org/python-k-middle-elements/
         if self.seq_length is None:
             K = min_length
+            # print("HERE", K)
         elif self.seq_length > min_length:
             print(self.seq_length,' ',min_length)
             ValueError('Seq length is too long!')
         else:
             K = self.seq_length
 
-        torch_array = torch.zeros((len(batch), K, 138))
+        torch_array = torch.zeros((len(batch), K, 142))
         gt_array = torch.zeros((len(batch), K))        
         # print(torch_array.shape)
         # input()   
@@ -118,12 +122,14 @@ class TactileDataset(Dataset):
 
             if self.sample_type == SampleType.CENTER:
                 strt_idx = (len(data) // 2) - (K // 2)
+                # print(K, strt_idx, len(data))
             elif self.sample_type == SampleType.FRONT:
                 strt_idx = 0
             elif self.sample_type == SampleType.RANDOM:
                 max_start_value = len(data) - K
                 # print()
                 strt_idx = random.randrange(0, max_start_value+1, 1)
+                # print(strt_idx)
             else:
                 ValueError('Invalid sample type')
             # print(data.shape, gt.shape)
@@ -256,7 +262,7 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 def main():
     sample_type = SampleType.RANDOM
-    seq_length = 15
+    seq_length = None
 
     # Parse args
     args = parse_arguments()
@@ -273,7 +279,11 @@ def main():
         raise ValueError("Weird arg error")
     
 
-    run = wandb.init(project="LSTM_papilarray", entity="deep-tactile-rotatation-estimation", config=cfg_input)
+    run = wandb.init(project="Ruler-papilarray", 
+                     entity="deep-tactile-rotatation-estimation", 
+                     config=cfg_input,
+                     mode="disabled"
+    )
     # run = wandb.init(project="SRP", config=cfg_input)
     config = wandb.config
     print(config)
