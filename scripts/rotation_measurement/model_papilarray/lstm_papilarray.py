@@ -1,7 +1,8 @@
-from sympy import kronecker_product
+from sqlite3 import adapt
 import torch
 from torch import random
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 import pandas as pd
 import numpy as np
@@ -15,9 +16,17 @@ import sys
 import yaml
 from pathlib import Path
 from arg_set import parse_arguments
+from enum import Enum
+import random
+
+class SampleType(Enum):
+    FRONT = 0
+    CENTER = 1
+    RANDOM = 2
+
 
 class TactileDataset(Dataset):
-    def __init__(self, path, normalize=False, mode=None, seq_length=None, label_scale = 1):
+    def __init__(self, path, normalize=False, mode=None, seq_length=None, label_scale = 1, sample_type = SampleType.RANDOM):
         self.data_path = path if mode is None else path+mode+'/'
         self.initial_path = os.getcwd()
         os.chdir(self.data_path)
@@ -35,6 +44,8 @@ class TactileDataset(Dataset):
             self.max_angle = 167.61925
 
 
+        self.sample_type = sample_type
+    
     def __len__(self):
         return len(self.datapoints)
     
@@ -86,10 +97,16 @@ class TactileDataset(Dataset):
         min_length = min(map(lambda x : x[0].shape[0], batch))
 
         # https://www.geeksforgeeks.org/python-k-middle-elements/
-        K = min_length
+        if self.seq_length is None:
+            K = min_length
+        elif self.seq_length > min_length:
+            print(self.seq_length,' ',min_length)
+            ValueError('Seq length is too long!')
+        else:
+            K = self.seq_length
 
-        torch_array = torch.zeros((len(batch), min_length, 138))
-        gt_array = torch.zeros((len(batch), min_length))        
+        torch_array = torch.zeros((len(batch), K, 138))
+        gt_array = torch.zeros((len(batch), K))        
         # print(torch_array.shape)
         # input()   
 
@@ -98,6 +115,17 @@ class TactileDataset(Dataset):
             # computing strt, and end index 
             strt_idx = 0 #(len(data) // 2) - (K // 2)
             end_idx = (len(data) // 2) + (K // 2)
+
+            if self.sample_type == SampleType.CENTER:
+                strt_idx = (len(data) // 2) - (K // 2)
+            elif self.sample_type == SampleType.FRONT:
+                strt_idx = 0
+            elif self.sample_type == SampleType.RANDOM:
+                max_start_value = len(data) - K
+                # print()
+                strt_idx = random.randrange(0, max_start_value+1, 1)
+            else:
+                ValueError('Invalid sample type')
             # print(data.shape, gt.shape)
             # print(data_cropped.shape, gt_cropped.shape)
             # print("cropped size", data[strt_idx: end_idx + 1, :].shape)
@@ -123,8 +151,10 @@ class RegressionLSTM(nn.Module):
         self.num_layers = num_layers
         self.device = device
 
-        self.start_linear1 = nn.Linear(in_features=self.num_features, out_features=self.hidden_size)
-        self.start_linear2 = nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size)
+        # self.start_linear1 = nn.Linear(in_features=self.num_features, out_features=200)
+        # self.start_linear2 = nn.Linear(in_features=200, out_features=200)
+        # self.start_linear3 = nn.Linear(in_features=200, out_features=self.num_features)
+        # self.sig = nn.Sigmoid()
 
         self.lstm = nn.LSTM(
             input_size = self.num_features,
@@ -133,8 +163,11 @@ class RegressionLSTM(nn.Module):
             num_layers = self.num_layers,
             dropout = dropout
         )
+
+        # self.out_lin1 = nn.Linear(self.hidden_size, self.hidden_size)
+        # self.out_lin2 = nn.Linear(self.hidden_size, self.hidden_size)
         
-        self.output_linear = nn.Linear(in_features=self.hidden_size, out_features=1)
+        self.output_linear_final = nn.Linear(in_features=self.hidden_size, out_features=1)
 
     def init_model_state(self, batch_size):
         h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
@@ -152,7 +185,7 @@ class RegressionLSTM(nn.Module):
         # x = self.start_linear2(x)
 
         # print(x.shape, h0.shape, c0.shape)
-
+        # x = self.start_linear3(self.sig(self.start_linear2(self.sig(self.start_linear1(x)))))
         
         #out is size (batch, seq, feat*layers) for batch_first=True
         out, hidden = self.lstm(x, (h0, c0))
@@ -166,7 +199,9 @@ class RegressionLSTM(nn.Module):
         # out = self.linear(out.contiguous().view(-1, out.size(2)))
         # print(out.shape)
 
-        out = self.output_linear(out)
+        # out = self.sig(self.out_lin1(out))
+        # out = self.sig(self.out_lin2(out))
+        out = self.output_linear_final(out)
 
         # print(out.shape)
 
@@ -220,6 +255,9 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 
 def main():
+    sample_type = SampleType.RANDOM
+    seq_length = 15
+
     # Parse args
     args = parse_arguments()
     
@@ -245,7 +283,7 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], normalize=config["normalize"])
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length, normalize=config["normalize"])
     train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
