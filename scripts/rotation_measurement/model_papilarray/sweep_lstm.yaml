@@ -37,6 +37,8 @@ parameters:
     value: './results/'
   label_scale: 
     value: 90
+  normalize: 
+    value: True
 
 project: SRP
 

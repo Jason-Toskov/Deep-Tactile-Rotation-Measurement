@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--test_only', type=bool)
     parser.add_argument('--train_frac', type=float)
     parser.add_argument('--weight_decay', type=float)
+    parser.add_argument('--normalize', type=bool)
     
     args = parser.parse_args()
     

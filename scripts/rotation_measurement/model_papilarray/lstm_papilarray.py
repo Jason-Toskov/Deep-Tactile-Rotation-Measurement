@@ -1,3 +1,4 @@
+from sympy import kronecker_product
 import torch
 from torch import random
 import torch.nn as nn
@@ -16,7 +17,7 @@ from pathlib import Path
 from arg_set import parse_arguments
 
 class TactileDataset(Dataset):
-    def __init__(self, path, mode=None, seq_length=None, label_scale = 1):
+    def __init__(self, path, normalize=False, mode=None, seq_length=None, label_scale = 1):
         self.data_path = path if mode is None else path+mode+'/'
         self.initial_path = os.getcwd()
         os.chdir(self.data_path)
@@ -24,21 +25,60 @@ class TactileDataset(Dataset):
         os.chdir(self.initial_path)
         self.seq_length = seq_length
         self.label_scale = label_scale
-    
+        self.normalize = normalize
+        self.keep_index = np.load("keep_index.npy")
+        if normalize:
+            self.max_values = np.load("max_values.npy")
+            self.min_values = np.load("min_values.npy")
+
+            self.min_angle = -119.604454
+            self.max_angle = 167.61925
+
+
     def __len__(self):
         return len(self.datapoints)
     
+    def scale(self, x, out_range=(-1, 1), domain=(-1, 1)):
+        
+        if type(domain[0]) == np.ndarray:
+            domain_tmp0 = np.tile(domain[0], (x.shape[0], 1))
+            domain_tmp1 = np.tile(domain[1], (x.shape[0], 1))
+
+            domain = (domain_tmp0, domain_tmp1) 
+
+        y = (x - (domain[1] + domain[0]) / 2) / (domain[1] - domain[0])
+        return y * (out_range[1] - out_range[0]) + (out_range[1] + out_range[0]) / 2
+
+    def getItem(self, i):
+        df = pd.read_csv(self.data_path + self.datapoints[i])
+        return df.values
+
     def __getitem__(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
-        # print(self.datapoints[i], df.values)
-        
+        true_values = np.take(df.values, self.keep_index.squeeze(), axis=1)
+
+        angle = None
+        df_tensor = None        
         if self.seq_length is None:
-            df_tensor = torch.Tensor(df.values).float()
+
+            if self.normalize:
+
+                normalized = self.scale(true_values[:, :-2], domain=(self.min_values[:-2], self.max_values[:-2])) 
+                angle = self.scale(true_values[:, -2], domain=(self.min_values[-2], self.max_values[-2]))
+                # print(self.min_values[-2], self.max_values[-2], true_values[:, -2],  angle)
+
+                df_tensor = torch.Tensor(normalized).float()
+
+            else:
+                # only normalize angle
+                df_tensor = torch.Tensor(true_values[:, :-2]).float()
+                angle =  true_values[:,-2] / self.label_scale
         else:
-            pass # Can do some other stuff here
+            df_tensor = torch.Tensor(true_values[:, :-2]).float()
+            angle =  true_values[:,-2] / self.label_scale
         
         # -2 because the time step is ignored
-        return df_tensor[:,0:-2], df_tensor[:,-2] / self.label_scale
+        return df_tensor, angle
     
     def collate_fn(self, batch):
 
@@ -48,7 +88,7 @@ class TactileDataset(Dataset):
         # https://www.geeksforgeeks.org/python-k-middle-elements/
         K = min_length
 
-        torch_array = torch.zeros((len(batch), min_length, 142))
+        torch_array = torch.zeros((len(batch), min_length, 138))
         gt_array = torch.zeros((len(batch), min_length))        
         # print(torch_array.shape)
         # input()   
@@ -56,7 +96,7 @@ class TactileDataset(Dataset):
         for (index, (data, gt)) in enumerate(batch):
 
             # computing strt, and end index 
-            strt_idx = (len(data) // 2) - (K // 2)
+            strt_idx = 0 #(len(data) // 2) - (K // 2)
             end_idx = (len(data) // 2) + (K // 2)
             # print(data.shape, gt.shape)
             # print(data_cropped.shape, gt_cropped.shape)
@@ -67,11 +107,10 @@ class TactileDataset(Dataset):
             # print(data_cropped.shape, gt_cropped.shape)
             # input()            
             torch_array[index, :, :] = data_cropped
-            gt_array[index, :] = (gt_cropped - gt_cropped[0])
+            gt_array[index, :] = torch.tensor(gt_cropped - gt_cropped[0])
             # print((gt_cropped - gt_cropped[0]))
             # print(gt_cropped)
             # input()
-
 
         return torch_array, gt_array
         
@@ -206,7 +245,7 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale = config["label_scale"])
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], normalize=config["normalize"])
     train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
@@ -274,7 +313,7 @@ def main():
     best_model.load_state_dict(torch.load(config["model_path"]))
     best_model = best_model.to(device)
     
-    #Refresh loaders
+    #Refresh loaders                        
     train_loader = DataLoader(train_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
     test_loader = DataLoader(test_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
         
