@@ -10,6 +10,7 @@ from std_msgs.msg import Empty as EmptyMsg
 from cv_bridge import CvBridge, CvBridgeError
 from std_srvs.srv import Empty, EmptyResponse
 from grasp_executor.srv import AngleTrack
+import matplotlib.pyplot as plt
 
 from enum import Enum
 
@@ -31,7 +32,7 @@ class AngleDetectorService:
         rospy.init_node("Angle_detector")
         # self.image_topic = "/realsense/rgb"
 
-        self.AD = AngleDetector(writeImages=True, showImages=False, cv2Image=False)
+        self.AD = AngleDetector(writeImages=True, showImages=True, cv2Image=False)
         # self.current_image = None
         # rospy.Subscriber(self.image_topic, Image, self.image_callback)
         rospy.Service("track_angle", AngleTrack, self.update_angle)
@@ -40,10 +41,11 @@ class AngleDetectorService:
         rospy.loginfo("Angle tracker ready!")
         rospy.spin()
 
-    def updateAngle(self, req):
-        return self.AD.update_angle(req.img)
+    def update_angle(self, req):
+        # print(dir(req))
+        return self.AD.update_angle(req.im)
 
-    def resetTracking(self, req):
+    def reset_tracking(self, req):
         self.AD.reset_tracking()
         return EmptyResponse()
 
@@ -55,17 +57,43 @@ class AngleDetector:
         self.state = Quadrant.INIT
         self.closest_state = Quadrant.INIT
         self.angle = None
+        self.largeChange = False
+        self.calculatedAngle = None
         self.angular_velocity = 0
+        self.prev_angle = None
         self.calc_time = None
         self.writeImages = writeImages
         self.showImages = showImages
         self.cv2Image = cv2Image
+        self.videoNumber = 0
+        self.videoWriter = cv2.VideoWriter(
+            str(self.videoNumber) + ".avi",
+            cv2.VideoWriter_fourcc("M", "J", "P", "G"),
+            5,
+            (600, 300),
+        )
+        # self.videoWriter2 = cv2.VideoWriter("original" + str(self.videoNumber) + '.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 60, (300,300))
 
     def reset_tracking(self):
         self.state = Quadrant.INIT
         self.closest_state = Quadrant.INIT
         self.angle = None
-        self.angular_velocity = None
+        self.calculatedAngle = None
+        self.largeChange = False
+        self.angular_velocity = 0
+        self.calc_time = None
+        self.videoNumber += 1
+        self.videoWriter.release()
+        # self.videoWriter2.release()
+
+        self.videoWriter = cv2.VideoWriter(
+            str(self.videoNumber) + ".avi",
+            cv2.VideoWriter_fourcc("M", "J", "P", "G"),
+            5,
+            (600, 300),
+        )
+        # self.videoWriter2 = cv2.VideoWriter("original" + str(self.videoNumber) + '.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 60, (300,300))
+
         print("reset!")
 
     def getAngle(self):
@@ -86,21 +114,32 @@ class AngleDetector:
                 / np.pi
             )
 
-        prev_angle = self.angle
+        self.prev_angle = self.angle
 
         if self.state == Quadrant.NW:
-            self.angle = -temp_angle
+            temp_angle = -temp_angle
         elif self.state == Quadrant.SW:
-            self.angle = temp_angle
+            temp_angle = temp_angle
         elif self.state == Quadrant.SE:
-            self.angle = 180 - temp_angle
+            temp_angle = 180 - temp_angle
         elif self.state == Quadrant.NE:
-            self.angle = -180 + temp_angle
+            temp_angle = -180 + temp_angle
 
+        if (self.prev_angle is None):
+            self.angle = temp_angle
+        elif abs(temp_angle - self.prev_angle) > 20:
+            # very large change
+            self.largeChange = True
+            pass
+        else:
+            self.angle = temp_angle
+
+        self.calculatedAngle = temp_angle
         current_time = timeit.default_timer()
 
         if self.calc_time:
-            new_angular_velocity = (self.angle - prev_angle) / (
+            # print(self.angle, prev_angle, self.calc_time, current_time)
+            new_angular_velocity = (self.angle - self.prev_angle) / (
                 current_time - self.calc_time
             )
             self.angular_velocity = (
@@ -168,7 +207,7 @@ class AngleDetector:
             cv2.imshow("orig", im)
             cv2.imshow("hsv", image)
             cv2.imshow("mask", mask)
-            cv2.waitKey(1)
+            # cv2.waitKey(1)
 
         if self.writeImages:
             cv2.imwrite("img_temp.jpeg", im)
@@ -177,10 +216,13 @@ class AngleDetector:
 
         contours = None
         if PYTHON3:
-            contours, _ = cv2.findContours(
+            # print(len(cv2.findContours(
+            #     mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            # )))
+
+            _, contours, _ = cv2.findContours(
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
             )
-            # print(tmp, contours)
             contours = sorted(
                 contours, key=lambda el: cv2.contourArea(el), reverse=True
             )
@@ -198,6 +240,7 @@ class AngleDetector:
         cv2.circle(canvas, center1, 2, (0, 255, 0), -1)
 
         M = cv2.moments(contours[1])
+        print(M)
         center2 = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
         cv2.circle(canvas, center2, 2, (0, 255, 0), -1)
 
@@ -208,15 +251,36 @@ class AngleDetector:
             self.closest_new_state()
             self.state_update(center1, center2)
             self.angle_calculation(center1, center2)
+        # print(canvas.shape)
+        # if self.showImages:
+        # print("start")
 
-        if self.showImages:
-            cv2.imshow("canvas", canvas)
-            cv2.waitKey()
+        # cv2.imshow("canvas", canvas)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # plt.imshow(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+        # plt.show()
+        # print("help")
+
+        vis = np.concatenate((canvas, im), axis=1)
+        if self.angle is not None and self.prev_angle is not None:
+            cv2.putText(
+                vis,
+                f"prev angle: {self.prev_angle:.2f}, current: {self.angle:.2f}, delta: {(self.angle - self.prev_angle):.2f}",
+                (20, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (0, 255, 0),
+                1,
+            )
+
+        print(vis.shape)
+        self.videoWriter.write(vis)
 
         if self.writeImages:
             cv2.imwrite("canvas.jpeg", canvas)
-
-        return self.angle
+        print(self.angle)
+        return self.calculatedAngle, self.largeChange
 
 
 if __name__ == "__main__":

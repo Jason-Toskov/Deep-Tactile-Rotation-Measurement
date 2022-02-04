@@ -25,6 +25,10 @@ class DataBagger:
         # Define source and output
         camRgb = pipeline.create(dai.node.ColorCamera)
         xoutRgb = pipeline.create(dai.node.XLinkOut)
+        controlIn = pipeline.create(dai.node.XLinkIn)
+
+        controlIn.setStreamName('control')
+        controlIn.out.link(camRgb.inputControl)
 
         xoutRgb.setStreamName("rgb")
 
@@ -33,6 +37,7 @@ class DataBagger:
         camRgb.setInterleaved(False)
         camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
         camRgb.setFps(60)
+        
 
         # print(dir(camRgb.properties))
         # print(dir(camRgb))
@@ -53,6 +58,12 @@ class DataBagger:
             dCoeff = calib.getDistortionCoefficients(camid)
             # pdb.set_trace()
             print(matrix, dCoeff)
+
+            controlQueue = device.getInputQueue('control')
+            ctrl = dai.CameraControl()
+            ctrl.setManualFocus(132)
+            controlQueue.send(ctrl)
+
 
             # Output queue will be used to get the rgb frames from the output defined above
             qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)

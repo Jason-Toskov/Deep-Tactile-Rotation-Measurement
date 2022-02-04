@@ -10,7 +10,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import copy
 import cv2
 
-FILE_DIR = './'
+FILE_DIR = '../data_collection/'
 FOLDER_NAME = 'digitdata'
 BAG_DIR = 'recorded_data_bags/'
 OUTPUT_DIR = 'digit_data_unpacked/'
@@ -27,8 +27,8 @@ def digit_data_to_folder(folder, bridge, time_data, image_data, digit_data_0, di
         new_row['timestep'] = time.to_nsec()
         df = df.append(copy.deepcopy(new_row), ignore_index=True)
 
-        dig_im_0 = bridge.imgmsg_to_cv2(digit_0, desired_encoding='BGR8')
-        dig_im_1 = bridge.imgmsg_to_cv2(digit_1, desired_encoding='BGR8')
+        dig_im_0 = bridge.imgmsg_to_cv2(digit_0, desired_encoding='8UC3')
+        dig_im_1 = bridge.imgmsg_to_cv2(digit_1, desired_encoding='8UC3')
 
         cv2.imwrite(folder+"/"+str(i)+"_digit_0.jpeg", dig_im_0)
         cv2.imwrite(folder+"/"+str(i)+"_digit_1.jpeg", dig_im_1)
@@ -67,9 +67,9 @@ def main(track_angle_srv, reset_angle_srv):
         reset_angle_srv()
 
 if __name__ == "__main__":
-    if not os.path.exists(OUTPUT_DIR):
+    if not os.path.exists(FILE_DIR + OUTPUT_DIR):
         # Create a new directory because it does not exist 
-        os.makedirs(OUTPUT_DIR)
+        os.makedirs(FILE_DIR + OUTPUT_DIR)
         print("The new directory is created!")
 
     rospy.wait_for_service('track_angle')
