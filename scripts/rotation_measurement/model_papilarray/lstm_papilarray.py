@@ -363,24 +363,30 @@ def main():
     else:
         raise ValueError("Weird arg error")
     
-    if cfg_input["normalize"]:
-        cfg_input["num_features"] = 138
-        
-    if cfg_input['sample'] == 'random':
-        sample_type = SampleType.RANDOM
-    elif cfg_input['sample'] == 'center':
-        sample_type = SampleType.CENTER
-    elif cfg_input['sample'] == 'front':
-        sample_type = SampleType.FRONT
+
 
     run = wandb.init(project="LSTM_papilarray_sweep", 
                      entity="deep-tactile-rotatation-estimation", 
                      config=cfg_input,
                     #  notes="Single angle LSTM, seq length = 5, hyperparam changes",
-                     mode="disabled"
+                    #  mode="disabled"
     )
     # run = wandb.init(project="SRP", config=cfg_input)
+    # wandb.config.update()
+    
     config = wandb.config
+    # config.update(allow_val_changes=True)
+    num_features = 142
+    if config["normalize"]:
+        num_features = 138
+        
+    if config['sample'] == 'random':
+        sample_type = SampleType.RANDOM
+    elif config['sample'] == 'center':
+        sample_type = SampleType.CENTER
+    elif config['sample'] == 'front':
+        sample_type = SampleType.FRONT
+    # config = wandb.config
     print(config)
     
     #Set device to GPU_indx if GPU is avaliable
@@ -388,7 +394,7 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length, normalize=config["normalize"], angle_difference=angle_difference, num_features=config["num_features"])
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length, normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features)
     train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
@@ -397,7 +403,7 @@ def main():
     test_loader = DataLoader(test_data, batch_size = config["test_batch_size"], shuffle=True, collate_fn=data.collate_fn)
     
     # Create model
-    model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
+    model = RegressionLSTM(device, num_features, config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
     if config["resume_from_checkpoint"]:
         model.load_state_dict(torch.load(config["model_path"]))
     model = model.to(device)
@@ -455,7 +461,7 @@ def main():
     
     if not angle_difference:
         #Load best model
-        best_model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
+        best_model = RegressionLSTM(device, num_features, config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
         best_model.load_state_dict(torch.load(config["model_path"]))
         best_model = best_model.to(device)
         
