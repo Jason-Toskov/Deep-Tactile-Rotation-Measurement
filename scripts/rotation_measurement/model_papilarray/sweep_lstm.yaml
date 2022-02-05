@@ -14,22 +14,40 @@ parameters:
   num_epochs: 
     value: 500
   learning_rate: 
-    values: [0.001]
+    # values: [0.001]
+    distribution: uniform
+    min: 0.000001
+    max: 0.01
   weight_decay: 
-    values: [0.0001]
+    # values: [0.0001]
+    distribution: uniform
+    min: 0
+    max: 0.1
   train_frac: 
     value: 0.8
   train_batch_size: 
-    values: [1, 4, 64]
+    # values: [1, 4, 64]
+    distribution: int_uniform
+    min: 1
+    max: 32
 
   num_features: 
     value: 142
   hidden_size: 
-    values: [128, 256]
+    # values: [128, 256]
+    distribution: int_uniform
+    min: 8
+    max: 2000
   num_layers: 
-    values: [3, 5]
+    # values: [3, 5]
+    distribution: int_uniform
+    min: 1
+    max: 20
   dropout: 
-    values: [0.2, 0.1]
+    # values: [0.2, 0.1]
+    distribution: uniform
+    min: 0
+    max: 0.75
 
   data_path: 
     value: './Data/'
@@ -38,8 +56,10 @@ parameters:
   label_scale: 
     value: 90
   normalize: 
-    value: True
+    values: [False, True]
 
-project: SRP
+  sample:
+    values: ['random', 'center', 'front']
+
 
 

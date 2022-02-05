@@ -26,7 +26,7 @@ class SampleType(Enum):
 
 
 class TactileDataset(Dataset):
-    def __init__(self, path, normalize=False, mode=None, seq_length=None, label_scale = 1, sample_type = SampleType.RANDOM):
+    def __init__(self, path, normalize=False, mode=None, seq_length=None, label_scale = 1, sample_type = SampleType.RANDOM, angle_difference=False, num_features=142):
         self.data_path = path if mode is None else path+mode+'/'
         self.initial_path = os.getcwd()
         os.chdir(self.data_path)
@@ -35,6 +35,8 @@ class TactileDataset(Dataset):
         self.seq_length = seq_length
         self.label_scale = label_scale
         self.normalize = normalize
+        self.angle_difference = angle_difference
+        self.num_features = num_features
         if normalize:
             self.max_values = np.load("max_values.npy")
             self.min_values = np.load("min_values.npy")
@@ -71,7 +73,7 @@ class TactileDataset(Dataset):
         return df.values
 
     def angleLimits(self, min=True):
-        return self.min_values[:-2] if min else self.max_values[:-2]
+        return self.min_values[-2] if min else self.max_values[-2]
 
     def __getitem__(self, i):
         df = pd.read_csv(self.data_path + self.datapoints[i])
@@ -118,8 +120,11 @@ class TactileDataset(Dataset):
         else:
             K = self.seq_length
 
-        torch_array = torch.zeros((len(batch), K, 142))
-        gt_array = torch.zeros((len(batch), K))        
+        torch_array = torch.zeros((len(batch), K, self.num_features))
+        if self.angle_difference:
+            gt_array = torch.zeros((len(batch)))  
+        else:
+            gt_array = torch.zeros((len(batch), K))        
         # print(torch_array.shape)
         # input()   
 
@@ -150,16 +155,83 @@ class TactileDataset(Dataset):
             # print(data_cropped.shape, gt_cropped.shape)
             # input()            
             torch_array[index, :, :] = data_cropped
-            gt_array[index, :] = torch.tensor(gt_cropped - gt_cropped[0])
+            if self.angle_difference:
+                gt_array[index] = torch.tensor(gt_cropped - gt_cropped[0])[-1]
+            else:
+                gt_array[index, :] = torch.tensor(gt_cropped - gt_cropped[0])
+            # breakpoint()
             # print((gt_cropped - gt_cropped[0]))
             # print(gt_cropped)
             # input()
 
         return torch_array, gt_array
         
+class NextAnglePredictionMLP(nn.Module):
+    def __init__(self, device, num_features, hidden_size, num_layers, dropout, seq_length):
+        super().__init__()
+        self.num_features = num_features
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.device = device
+        self.seq_length =seq_length
 
+        self.lin1 = nn.Linear(self.num_features*seq_length, self.num_features*seq_length)
+        self.lin2 = nn.Linear(self.num_features*seq_length, self.num_features*seq_length//2)
+        self.lin3 = nn.Linear(self.num_features*seq_length//2, self.num_features*seq_length//4)
+        self.lin4 = nn.Linear(self.num_features*seq_length//4, hidden_size)
+        self.lin5= nn.Linear(hidden_size, 1)
+        
+        self.drop = nn.Dropout(p=dropout)
+        self.act = nn.Tanh()
+        
+        
+    def forward(self, x):   
+        x = x.view(-1, self.num_features*self.seq_length)
+          
+        x = self.drop(self.act(self.lin1(x)))
+        x = self.drop(self.act(self.lin2(x)))
+        x = self.drop(self.act(self.lin3(x)))
+        x = self.drop(self.act(self.lin4(x)))
+        out = self.drop(self.act(self.lin5(x)))
+
+        return out
+class NextAnglePredictionLSTM(nn.Module):
+    def __init__(self, device, num_features, hidden_size, num_layers, dropout, seq_length=None):
+        super().__init__()
+        self.num_features = num_features
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.device = device
+
+        self.lstm = nn.LSTM(
+            input_size = self.num_features,
+            hidden_size = self.hidden_size,
+            batch_first = True,
+            num_layers = self.num_layers,
+            dropout = dropout
+        )
+        
+        self.output_linear_final = nn.Linear(in_features=self.hidden_size, out_features=1)
+
+    def init_model_state(self, batch_size):
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).requires_grad_().to(self.device)
+        return (h0, c0)
+        
+    def forward(self, x):        
+        batch_size = x.shape[0]
+
+        h0, c0 = self.init_model_state(batch_size)
+        out, hidden = self.lstm(x, (h0, c0))
+        
+        #Take last hidden state only
+        out = out[:,-1,:]
+        out = self.output_linear_final(out)
+
+        return out
+    
 class RegressionLSTM(nn.Module):
-    def __init__(self, device, num_features, hidden_size, num_layers, dropout):
+    def __init__(self, device, num_features, hidden_size, num_layers, dropout, seq_length=None):
         super().__init__()
         self.num_features = num_features
         self.hidden_size = hidden_size
@@ -203,7 +275,8 @@ class RegressionLSTM(nn.Module):
         # x = self.start_linear3(self.sig(self.start_linear2(self.sig(self.start_linear1(x)))))
         
         #out is size (batch, seq, feat*layers) for batch_first=True
-        out, hidden = self.lstm(x, (h0, c0))
+        out, (h_n, c_n) = self.lstm(x, (h0, c0))
+        # breakpoint()
 
         # out = out[:, -1, :]
 
@@ -219,6 +292,7 @@ class RegressionLSTM(nn.Module):
         out = self.output_linear_final(out)
 
         # print(out.shape)
+        # breakpoint()
 
         return out
     
@@ -241,7 +315,8 @@ def train(device, loader, model, loss_func, optim, l1loss):
         optim.step()
         
         l1error = l1loss(out.squeeze(), label.to(device).squeeze())
-        abs_error_count += l1error.item()        
+        abs_error_count += l1error.item()    
+        # breakpoint()    
 
     loss_count /= i+1
     abs_error_count /= i+1
@@ -272,6 +347,7 @@ def test(device, loader, model, loss_func, optim, l1loss):
 def main():
     sample_type = SampleType.RANDOM
     seq_length = None
+    angle_difference = False
 
     # Parse args
     args = parse_arguments()
@@ -287,10 +363,20 @@ def main():
     else:
         raise ValueError("Weird arg error")
     
+    if cfg_input["normalize"]:
+        cfg_input["num_features"] = 138
+        
+    if cfg_input['sample'] == 'random':
+        sample_type = SampleType.RANDOM
+    elif cfg_input['sample'] == 'center':
+        sample_type = SampleType.CENTER
+    elif cfg_input['sample'] == 'front':
+        sample_type = SampleType.FRONT
 
-    run = wandb.init(project="Ruler-papilarray", 
+    run = wandb.init(project="LSTM_papilarray_sweep", 
                      entity="deep-tactile-rotatation-estimation", 
                      config=cfg_input,
+                    #  notes="Single angle LSTM, seq length = 5, hyperparam changes",
                      mode="disabled"
     )
     # run = wandb.init(project="SRP", config=cfg_input)
@@ -302,7 +388,7 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
     
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length, normalize=config["normalize"])
+    data = TactileDataset(config["data_path"], label_scale = config["label_scale"], sample_type=sample_type, seq_length=seq_length, normalize=config["normalize"], angle_difference=angle_difference, num_features=config["num_features"])
     train_data_length = round(len(data)*config["train_frac"])
     test_data_length = len(data) - train_data_length
     train_data, test_data = random_split(data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
@@ -311,7 +397,7 @@ def main():
     test_loader = DataLoader(test_data, batch_size = config["test_batch_size"], shuffle=True, collate_fn=data.collate_fn)
     
     # Create model
-    model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
+    model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
     if config["resume_from_checkpoint"]:
         model.load_state_dict(torch.load(config["model_path"]))
     model = model.to(device)
@@ -341,6 +427,8 @@ def main():
         for i in range(config["num_epochs"]):
             loss_train, abs_error_train = train(device, train_loader, model, loss_func, optim, l1loss)
             loss_test, abs_error_test = test(device, test_loader, model, loss_func, optim, l1loss)
+            
+            # breakpoint()
 
             wandb.log({
                 "Loss/train":loss_train,
@@ -365,53 +453,54 @@ def main():
         run.log_artifact(artifact)
         # run.join()  
     
-    #Load best model
-    best_model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"])
-    best_model.load_state_dict(torch.load(config["model_path"]))
-    best_model = best_model.to(device)
-    
-    #Refresh loaders                        
-    train_loader = DataLoader(train_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
-    test_loader = DataLoader(test_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
+    if not angle_difference:
+        #Load best model
+        best_model = RegressionLSTM(device, config["num_features"], config["hidden_size"], config["num_layers"], config["dropout"], seq_length=seq_length)
+        best_model.load_state_dict(torch.load(config["model_path"]))
+        best_model = best_model.to(device)
         
-    #plot that shows labels/out of some sequences
-    fig, axs = plt.subplots(10, 10)
-    for ax in axs.flat:
-        features, label = next(iter(train_loader))
-        count = 0
-        while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(train_data):
+        #Refresh loaders                        
+        train_loader = DataLoader(train_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
+        test_loader = DataLoader(test_data, batch_size = 1, shuffle=True, collate_fn=data.collate_fn)
+            
+        #plot that shows labels/out of some sequences
+        fig, axs = plt.subplots(10, 10)
+        for ax in axs.flat:
             features, label = next(iter(train_loader))
-            count += 1
+            count = 0
+            while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(train_data):
+                features, label = next(iter(train_loader))
+                count += 1
 
-        out = best_model(features.to(device))
-        out = out.squeeze()
-        label = label.squeeze()
-        x_range = [*range(len(out))]
-        ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
-        ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
-    fig.suptitle("Train examples")
-    wandb.log({'Examples/Train': fig})
-    # plt.savefig(plot_path + 'examples_train.png')
-    # plt.show()
+            out = best_model(features.to(device))
+            out = out.squeeze()
+            label = label.squeeze()
+            x_range = [*range(len(out))]
+            ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
+            ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
+        fig.suptitle("Train examples")
+        wandb.log({'Examples/Train': fig})
+        # plt.savefig(plot_path + 'examples_train.png')
+        # plt.show()
 
-    fig, axs = plt.subplots(10, 10)
-    for ax in axs.flat:
-        features, label = next(iter(test_loader))
-        count = 0
-        while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(test_data):
+        fig, axs = plt.subplots(10, 10)
+        for ax in axs.flat:
             features, label = next(iter(test_loader))
-            count += 1
-        out = best_model(features.to(device))
-        out = out.squeeze()
-        label = label.squeeze()
-        x_range = [*range(len(out))]
-        ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
-        ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
-    
-    fig.suptitle("Test examples")
-    wandb.log({'Examples/Test': fig})
-    # plt.savefig(plot_path + 'examples_train.png')
-    # plt.show()
+            count = 0
+            while(max(label.squeeze())-min(label.squeeze()) < 5/config["label_scale"]) and count < len(test_data):
+                features, label = next(iter(test_loader))
+                count += 1
+            out = best_model(features.to(device))
+            out = out.squeeze()
+            label = label.squeeze()
+            x_range = [*range(len(out))]
+            ax.plot(x_range, data.strechAngle(label.detach().to('cpu')), label = 'Ground truth')
+            ax.plot(x_range, data.strechAngle(out.detach().to('cpu')), label = 'Prediction')
+        
+        fig.suptitle("Test examples")
+        wandb.log({'Examples/Test': fig})
+        # plt.savefig(plot_path + 'examples_train.png')
+        # plt.show()
     
     print("Training complete!")
     
