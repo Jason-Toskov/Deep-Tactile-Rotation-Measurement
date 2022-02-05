@@ -61,5 +61,8 @@ parameters:
   sample:
     values: ['random', 'center', 'front']
 
+entity: deep-tactile-rotatation-estimation
+project: LSTM_papilarray_sweep
+
 
 
