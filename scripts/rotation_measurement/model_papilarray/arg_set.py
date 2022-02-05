@@ -5,7 +5,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('-c', '--config', type=Path, default=Path('./base_params.yaml'), nargs='?')
-    parser.add_argument('--batch_size', type=int)
+    parser.add_argument('--train_batch_size', type=int)
+    parser.add_argument('--test_batch_size', type=int)
     parser.add_argument('--data_path', type=str)
     parser.add_argument('--dropout', type=float)
     parser.add_argument('--hidden_size', type=int)

@@ -31,6 +31,9 @@ parameters:
     min: 1
     max: 32
 
+  test_batch_size: 
+    value: 1
+
   num_features: 
     value: 142
   hidden_size: 
