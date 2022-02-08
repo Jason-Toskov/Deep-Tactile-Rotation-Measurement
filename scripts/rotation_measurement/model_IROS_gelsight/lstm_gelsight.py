@@ -84,6 +84,7 @@ class GelSightDataset(Dataset):
         init_angle = gt_dict['rotationOnset']
         try:
             gt_tensor = torch.Tensor([v if v is not None else 0 for v in gt_dict.values() ][1:])
+            gt_tensor += init_angle
         except TypeError:
             breakpoint()
         
@@ -91,7 +92,7 @@ class GelSightDataset(Dataset):
         
         # breakpoint()
     
-        return data_tensor - data_tensor[0], gt_tensor/self.label_scale
+        return data_tensor, gt_tensor/self.label_scale
     
     def collate_fn(self, batch):
 
@@ -109,7 +110,7 @@ class GelSightDataset(Dataset):
             # ValueError('Seq length is too long!')
         else:
             K = self.seq_length
-
+        
         torch_array = torch.zeros((len(batch), K, batch[0][0].shape[1], batch[0][0].shape[2], batch[0][0].shape[3]))
         if self.angle_difference:
             gt_array = torch.zeros((len(batch)))  
@@ -130,8 +131,10 @@ class GelSightDataset(Dataset):
             elif self.sample_type == SampleType.FRONT:
                 strt_idx = 0
             elif self.sample_type == SampleType.RANDOM:
-                max_start_value = len(data) - K
+                max_start_value = len(data) - K -1
                 # print()
+                if max_start_value == 0:
+                    max_start_value = 1
                 strt_idx = random.randrange(0, max_start_value, 1)
                 # print(strt_idx)
             else:
@@ -154,13 +157,20 @@ class GelSightDataset(Dataset):
                 gt_array[index] = torch.tensor(gt_cropped - gt_cropped[0])[-1]
             else:
                 # gt_array[index, :] = torch.tensor(gt_cropped - gt_cropped[0])
-                gt_array[index, :] = torch.tensor(gt_cropped)
+                try:
+                    gt_array[index, :] = torch.tensor(gt_cropped)
+                except:
+                    data_cropped = data[0: 0 + K, :, :, :]
+                    gt_cropped = gt[0: 0 + K]
+                    torch_array[index, :, :, :, :] = data_cropped
+
+                    # breakpoint()
             # breakpoint()
             # print((gt_cropped - gt_cropped[0]))
             # print(gt_cropped)
             # input()
 
-        return torch_array, gt_array
+        return torch_array.view(len(batch)*K, batch[0][0].shape[1], batch[0][0].shape[2], batch[0][0].shape[3]), gt_array.view(len(batch)*K)
 
 class RegressionLSTM(nn.Module):
     def __init__(self, device, num_features, hidden_size, num_layers, dropout):
@@ -310,7 +320,7 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 def main():
     sample_type = SampleType.RANDOM
-    seq_length = 1
+    seq_length = 10
     angle_difference = False
     diff_from_start = False
     
@@ -331,7 +341,7 @@ def main():
     run = wandb.init(project="Gelsight_models", 
                      entity="deep-tactile-rotatation-estimation", 
                      config=cfg_input,
-                     notes="Diff from start, seq length = 1",
+                     notes="Absolute image, absolute angle",
                     #  mode="disabled"
     )
     
