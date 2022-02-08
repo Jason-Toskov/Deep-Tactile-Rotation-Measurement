@@ -2,7 +2,7 @@ resume_from_checkpoint: False
 test_only: False
 model_path: './results/best_model_2.pt'
 
-num_epochs: 20
+num_epochs: 200
 learning_rate: 0.0001
 weight_decay: 0
 train_frac: 0.8
