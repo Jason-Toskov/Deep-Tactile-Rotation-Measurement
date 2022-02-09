@@ -50,19 +50,20 @@ class GelSightDataset(Dataset):
         self.diff_from_start = diff_from_start
         
         self.trans = transforms.Compose([
-            transforms.Resize([64,64]),
+            transforms.Resize([256,256]),
+            transforms.CenterCrop([224,224]),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     
-    def trans(self):
-        trans_list = [
-            transforms.Resize([64,64]),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ]
+    # def trans(self):
+    #     trans_list = [
+    #         transforms.Resize([64,64]),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    #     ]
         
-        return transforms.Compose(trans_list)
+    #     return transforms.Compose(trans_list)
     
     def __len__(self):
         return len(self.dirs)
@@ -92,7 +93,7 @@ class GelSightDataset(Dataset):
         
         # breakpoint()
     
-        return data_tensor, gt_tensor/self.label_scale
+        return data_tensor - data_tensor[0], gt_tensor/self.label_scale
     
     def collate_fn(self, batch):
 
@@ -185,9 +186,9 @@ class RegressionLSTM(nn.Module):
             "touchdetect_resnet", sensors.DigitSensor
         )
         # self.touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
-        self.res = models.resnet18()
-        self.res.fc = nn.Linear(self.res.fc.in_features, 2)
-        self.res.load_state_dict(touch_detect_model_dict)
+        self.res = models.resnext50_32x4d()
+        # self.res.fc = nn.Linear(self.res.fc.in_features, 2)
+        # self.res.load_state_dict(touch_detect_model_dict)
         self.res.fc = nn.Linear(self.res.fc.in_features, self.num_features)
         
         
@@ -236,9 +237,9 @@ class RegressionCNN(nn.Module):
             "touchdetect_resnet", sensors.DigitSensor
         )
         # self.touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
-        self.res = models.resnet18()
-        self.res.fc = nn.Linear(self.res.fc.in_features, 2)
-        self.res.load_state_dict(touch_detect_model_dict)
+        self.res = models.resnext50_32x4d()
+        # self.res.fc = nn.Linear(self.res.fc.in_features, 2)
+        # self.res.load_state_dict(touch_detect_model_dict)
         self.res.fc = nn.Linear(self.res.fc.in_features, self.num_features)
         
         
@@ -341,7 +342,7 @@ def main():
     run = wandb.init(project="Gelsight_models", 
                      entity="deep-tactile-rotatation-estimation", 
                      config=cfg_input,
-                     notes="Absolute image, absolute angle",
+                     notes="diff image, larger seq size",
                     #  mode="disabled"
     )
     
