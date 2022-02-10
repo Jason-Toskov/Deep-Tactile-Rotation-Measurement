@@ -14,7 +14,6 @@ def parse_arguments():
     parser.add_argument('--learning_rate', type=float)
     parser.add_argument('--model_path', type=str)
     parser.add_argument('--num_epochs', type=int)
-    parser.add_argument('--num_features', type=int)
     parser.add_argument('--num_layers', type=int)
     parser.add_argument('--plot_path', type=str)
     parser.add_argument('--resume_from_checkpoint', type=bool)

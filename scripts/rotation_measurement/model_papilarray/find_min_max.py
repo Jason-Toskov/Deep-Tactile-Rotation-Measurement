@@ -1,6 +1,6 @@
 from lstm_papilarray import TactileDataset
 import numpy as np
-data = TactileDataset('./Data/', label_scale = 1)
+data = TactileDataset('./Velocity/', label_scale = 1)
 
 # max_values, max_angles = data.getItem(0)
 # min_values, min_angles = data.getItem(0)
