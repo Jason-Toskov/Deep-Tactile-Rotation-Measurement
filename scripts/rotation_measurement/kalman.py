@@ -2,7 +2,11 @@ from black import out
 from filterpy.kalman import KalmanFilter
 import numpy as np, glob
 import matplotlib.pyplot as plt
-for file in glob.glob("./model_papilarray/box_data_csvs/*.csv"):
+
+input_path = "./data_processing/new_cylinder_data_csvs/"
+output_path = "./data_processing/new_cylinder_data_csvs_filtered/"
+
+for file in glob.glob(input_path + "*.csv"):
 
 
     f = KalmanFilter (dim_x=2, dim_z=1)
@@ -60,7 +64,7 @@ for file in glob.glob("./model_papilarray/box_data_csvs/*.csv"):
             # input()
             output.append(f"{i.strip()},{f.x[0]},{f.x[1]}")
 
-    x = open(file.replace("data", "data2"), "w")
+    x = open(output_path + 'kalman_' + file.split('/')[-1], "w")
     x.write("\n".join(output))
     x.close()
 
@@ -76,5 +80,5 @@ for file in glob.glob("./model_papilarray/box_data_csvs/*.csv"):
 
 
     plt.legend()
-    plt.savefig(file + ".png")
+    plt.savefig(output_path + 'kalman_' + file.split('/')[-1].split('.csv')[0] + ".png")
     plt.clf()

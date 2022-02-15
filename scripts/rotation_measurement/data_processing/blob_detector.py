@@ -32,7 +32,7 @@ class AngleDetectorService:
         rospy.init_node("Angle_detector")
         # self.image_topic = "/realsense/rgb"
 
-        self.AD = AngleDetector(writeImages=True, showImages=True, cv2Image=False)
+        self.AD = AngleDetector(writeImages=False, showImages=False, cv2Image=False)
         # self.current_image = None
         # rospy.Subscriber(self.image_topic, Image, self.image_callback)
         rospy.Service("track_angle", AngleTrack, self.update_angle)
@@ -65,6 +65,7 @@ class AngleDetector:
         self.writeImages = writeImages
         self.showImages = showImages
         self.cv2Image = cv2Image
+        self.count = 0
         self.videoNumber = 0
         self.videoWriter = cv2.VideoWriter(
             str(self.videoNumber) + ".avi",
@@ -191,15 +192,36 @@ class AngleDetector:
         result = im.copy()
         image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 
-        lower = np.array([0, 85, 0])
-        upper = np.array([7, 255, 255])
+        # lower = np.array([0, 85, 0])
+        # upper = np.array([7, 255, 255])
+
+        lower = np.array([0, 181, 75])
+        upper = np.array([0, 255, 112])
+
         mask = cv2.inRange(image, lower, upper)
 
-        lower1 = np.array([175, 85, 0])
-        upper1 = np.array([180, 255, 255])
+        # lower1 = np.array([175, 85, 0])
+        # upper1 = np.array([180, 255, 255])
+
+        lower1 = np.array([175, 89, 0])
+        upper1 = np.array([180, 255, 95])
+
         mask1 = cv2.inRange(image, lower1, upper1)
 
-        mask = mask + mask1
+        lower2 = np.array([178, 0, 0])
+        upper2 = np.array([179, 255, 255])
+
+        mask2 = cv2.inRange(image, lower2, upper2)
+
+        lower3 = np.array([0, 62, 0])
+        upper3 = np.array([0, 255, 85])
+
+        mask3 = cv2.inRange(image, lower3, upper3)
+
+        # (hMin = 0 , sMin = 62, vMin = 0), (hMax = 0 , sMax = 255, vMax = 85)
+
+
+        mask = mask + mask1 + mask2 + mask3
 
         result = cv2.bitwise_and(result, result, mask=mask)
 
@@ -210,9 +232,9 @@ class AngleDetector:
             # cv2.waitKey(1)
 
         if self.writeImages:
-            cv2.imwrite("img_temp.jpeg", im)
-            cv2.imwrite("mask.jpeg", mask)
-            cv2.imwrite("result.jpeg", result)
+            cv2.imwrite("./wrote_ims/img_temp_"+str(self.count)+".jpeg", im)
+            cv2.imwrite("./wrote_ims/mask_"+str(self.count)+".jpeg", mask)
+            cv2.imwrite("./wrote_ims/result_"+str(self.count)+".jpeg", result)
 
         contours = None
         if PYTHON3:
@@ -220,7 +242,7 @@ class AngleDetector:
             #     mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
             # )))
 
-            _, contours, _ = cv2.findContours(
+            contours, _ = cv2.findContours(
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
             )
             contours = sorted(
@@ -278,7 +300,8 @@ class AngleDetector:
         self.videoWriter.write(vis)
 
         if self.writeImages:
-            cv2.imwrite("canvas.jpeg", canvas)
+            cv2.imwrite("./wrote_ims/canvas_"+str(self.count)+".jpeg", canvas)
+        # self.count += 1
         print(self.angle)
         return self.calculatedAngle, self.largeChange
 

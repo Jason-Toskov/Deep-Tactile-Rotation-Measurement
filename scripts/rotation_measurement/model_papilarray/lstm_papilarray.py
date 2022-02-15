@@ -442,6 +442,7 @@ def main():
     run = wandb.init(project="velocity_papilarray",
                      entity="deep-tactile-rotatation-estimation",
                      config=cfg_input,
+                     notes= 'augmented combined dataset',
                      #  mode="disabled"
                      )
     # run = wandb.init(project="SRP", config=cfg_input)
@@ -467,13 +468,21 @@ def main():
     device = torch.device(GPU_indx if torch.cuda.is_available() else 'cpu')
 
     # Create dataset/dataloaders
-    data = TactileDataset(config["data_path"], label_scale=config["label_scale"], sample_type=sample_type, seq_length=seq_length,
-                          normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features, transform=None)
-    
-    train_data_length = round(len(data)*config["train_frac"])
-    test_data_length = len(data) - train_data_length
-    train_data, test_data = random_split(
-        data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
+    if config['manual_test_set']:
+        data = TactileDataset(config["data_path"], label_scale=config["label_scale"], sample_type=sample_type, seq_length=seq_length,
+                            normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features, transform=None, mode='train')
+        train_data = TactileDataset(config["data_path"], label_scale=config["label_scale"], sample_type=sample_type, seq_length=seq_length,
+                            normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features, transform=None, mode='train')
+        test_data = TactileDataset(config["data_path"], label_scale=config["label_scale"], sample_type=sample_type, seq_length=seq_length,
+                            normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features, transform=None, mode='test')
+    else:
+        data = TactileDataset(config["data_path"], label_scale=config["label_scale"], sample_type=sample_type, seq_length=seq_length,
+                            normalize=config["normalize"], angle_difference=angle_difference, num_features=num_features, transform=None)
+        
+        train_data_length = round(len(data)*config["train_frac"])
+        test_data_length = len(data) - train_data_length
+        train_data, test_data = random_split(
+            data, [train_data_length, test_data_length], generator=torch.Generator().manual_seed(42))
 
     train_loader = DataLoader(
         train_data, batch_size=config["train_batch_size"], shuffle=True, collate_fn=data.collate_fn)

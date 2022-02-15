@@ -22,3 +22,17 @@ bags-27-1-2022.zip
 
 *_digit_data_bags*
 *Ruler_data/
+*diverse_*
+augmented_*
+*_csvs*
+diverse_ims
+combined_dataset
+*_bags*
+ims_for_poster
+test_ims
+wrote_ims
+
+*.zip
+rotation-detection-IROS-2021
+*_model_*
+*kube*

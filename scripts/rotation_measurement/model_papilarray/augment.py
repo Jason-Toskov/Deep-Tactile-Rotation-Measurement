@@ -1,8 +1,8 @@
 import glob, numpy as np
 from unicodedata import decimal
 from functools import reduce
-output_folder = "test"
-data_folder = "box_data2_csvs"
+output_folder = "augmented_new_cylinder_data_csvs_filtered"
+data_folder = "new_cylinder_data_csvs_filtered"
 
 def flatten(l):
     # this is a cool way to flatten a list of lists lol

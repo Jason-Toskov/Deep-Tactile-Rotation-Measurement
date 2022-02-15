@@ -186,7 +186,7 @@ class RegressionLSTM(nn.Module):
             "touchdetect_resnet", sensors.DigitSensor
         )
         # self.touch_model = TouchDetectModel(state_dict = touch_detect_model_dict)
-        self.res = models.resnext50_32x4d()
+        self.res = models.resnet18()
         # self.res.fc = nn.Linear(self.res.fc.in_features, 2)
         # self.res.load_state_dict(touch_detect_model_dict)
         self.res.fc = nn.Linear(self.res.fc.in_features, self.num_features)
@@ -321,7 +321,7 @@ def test(device, loader, model, loss_func, optim, l1loss):
 
 def main():
     sample_type = SampleType.RANDOM
-    seq_length = 10
+    seq_length = 3
     angle_difference = False
     diff_from_start = False
     
