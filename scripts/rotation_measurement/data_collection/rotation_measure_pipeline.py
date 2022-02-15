@@ -8,6 +8,8 @@ import tf
 import geometry_msgs
 import pdb
 
+from papillarray_ros_v2.srv import BiasRequest
+
 import moveit_commander
 import moveit_msgs.msg
 from std_msgs.msg import Header, Bool
@@ -42,15 +44,16 @@ class RotationMeasurer():
         self.gripper_data = 0
 
         # self.grasp_loc_pose = self.set_pose("base_link",-0.5506,  0.0973, 0.0700,  0.4969, 0.5030, -0.4922, 0.5076)
-        self.grasp_loc_pose = self.set_pose("base_link", -0.4, 0.0973, 0.08, 0.4969, 0.5030, -0.4922, 0.5076)
+        self.grasp_loc_pose = self.set_pose("base_link", -0.4, 0.0973, 0.07, 0.4969, 0.5030, -0.4922, 0.5076)
 
         self.grasp_loc_offset_pose = copy.deepcopy(self.grasp_loc_pose)
-        self.offset_z = 0.23 + 0.15
+        self.offset_z = 0.23 #+ 0.15
         self.grasp_loc_offset_pose.pose.position.z += self.offset_z
 
 
-        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/12, -PI/6, -PI/4]
-        self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/12, -PI/6]
+        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/4]
+        # self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/12, -PI/6]
+        self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, -PI/12, -PI/6]
         # self.on_ground_pertubation_angles_coeff = [PI/3]
 
         # for the box + tape
@@ -63,13 +66,13 @@ class RotationMeasurer():
 
         ### Gripped width code
 
-        self.close_width = 222###
+        self.close_width = 140###
 
-        self.loosest_grasp = 215
-        self.tightest_grasp = 217
-        self.num_step = 2
+        self.loosest_grasp = 127
+        self.tightest_grasp = 127
+        self.num_step = 1
 
-        self.skip_count = 173
+        self.skip_count = 0
         self.collect_data = True
 
          #### Rospy startups ####
@@ -88,6 +91,9 @@ class RotationMeasurer():
         # Gripper nodes
         self.gripper_sub = rospy.Subscriber('/Robotiq2FGripperRobotInput', inputMsg.Robotiq2FGripper_robot_input, self.gripper_state_callback)
         self.gripper_pub = rospy.Publisher('/Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
+
+
+        self.bias_contactile = rospy.ServiceProxy("/hub_0/send_bias_request", BiasRequest)
 
         self.collection_flag = DataCollectState()
         self.collection_flag.data = False
@@ -196,7 +202,7 @@ class RotationMeasurer():
                             # rospy.loginfo("Peturbing angle")
                             # self.move_to_position(currPose)
                             # rospy.sleep(0.1)
-
+                            self.bias_contactile()
                             # Ask user to put object into position and press enter
                             raw_input("\nPlease put object into gripper fingers and press ENTER: ")
 

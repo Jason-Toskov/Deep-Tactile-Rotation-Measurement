@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import rospy
 import rosbag
 import glob
@@ -9,11 +10,14 @@ import itertools
 from cv_bridge import CvBridge, CvBridgeError
 import copy
 import cv2
+from rosbag.bag import ROSBagUnindexedException
 
-FILE_DIR = '../data_collection/'
+FILE_DIR = './'
 FOLDER_NAME = 'digitdata'
-BAG_DIR = 'recorded_data_bags/'
-OUTPUT_DIR = 'digit_data_unpacked/'
+BAG_DIR = '../data_collection/recorded_data_bags/'
+OUTPUT_DIR = 'both_data_unpacked/'
+
+ONE_SENSOR_ONLY = True
 
 def digit_data_to_folder(folder, bridge, time_data, image_data, digit_data_0, digit_data_1, track_angle_srv):
     df = pd.DataFrame()
@@ -42,13 +46,17 @@ def main(track_angle_srv, reset_angle_srv):
     bag_list = glob.glob(FILE_DIR+BAG_DIR+'*.bag')
     print(FILE_DIR+BAG_DIR+'*.bag', bag_list)
 
-    for bag_dir in bag_list:
-        bag = rosbag.Bag(bag_dir)
-
+    for i, bag_dir in enumerate(bag_list):
+        try:
+            bag = rosbag.Bag(bag_dir)
+        except ROSBagUnindexedException:
+            print('Unindexed bag'+bag_dir+' with i='+str(i)+' (total list length = '+str(num_data_points)+')')
+        continue
         time_data = [msg.stamp for _, msg, _ in bag.read_messages(topics=['time'])]
         image_data = [msg for _, msg, _ in bag.read_messages(topics=['image'])]
         digit_data_0 = [msg for _, msg, _ in bag.read_messages(topics=['digit_0'])]
-        digit_data_1 = [msg for _, msg, _ in bag.read_messages(topics=['digit_1'])]
+        # second_tac_topic = 'digit_0' if ONE_SENSOR_ONLY else 'digit_1'
+        digit_data_1 = copy.deepcopy(digit_data_0) if ONE_SENSOR_ONLY else [msg for _, msg, _ in bag.read_messages(topics=['digit_1'])]
 
         meta = [msg for _, msg, _ in bag.read_messages(topics=['metadata'])][0]
 

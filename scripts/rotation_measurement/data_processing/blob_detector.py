@@ -66,7 +66,8 @@ class AngleDetector:
         self.state = Quadrant.INIT
         self.closest_state = Quadrant.INIT
         self.angle = None
-        self.angular_velocity = None
+        self.calc_time = None
+        self.angular_velocity = 0#None
         print("reset!")
 
     def getAngle(self):
@@ -212,7 +213,7 @@ class AngleDetector:
 
         if self.showImages:
             cv2.imshow("canvas", canvas)
-            cv2.waitKey()
+            cv2.waitKey(1)
 
         if self.writeImages:
             cv2.imwrite("canvas.jpeg", canvas)

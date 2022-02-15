@@ -16,12 +16,21 @@ from digit_interface import Digit
 
 from grasp_executor.msg import DataCollectState
 
+from enum import Enum
+
+class DataCollectionMode(Enum):
+    Contactile = 0
+    Digit = 1
+    Both = 2
+
+
 class DataBagger:
     def __init__(self):
         rospy.init_node("Data_bagger", anonymous=True)
 
-        self.use_papilarray = False
+        # self.use_papilarray = False
         self.digit_serials = ['D20235', 'D20226']
+        self.SENSORS = DataCollectionMode.Contactile
 
         self.image_topic = "/realsense/rgb"
         self.current_image = 0
@@ -31,13 +40,13 @@ class DataBagger:
         self.collection_flag_sub = rospy.Subscriber('/collect_data', DataCollectState, self.collect_flag_callback)  ##TODO
         
         ##TODO: Node to read tactile data
-        if self.use_papilarray:
+        if self.SENSORS == DataCollectionMode.Contactile:
             self.tactile_data_0 = (0, None)
             self.tactile_data_1 = (0, None)
                     
             self.tactile_0_sub = rospy.Subscriber('/hub_0/sensor_0', SensorState, self.sensor_0_callback)
             self.tactile_1_sub = rospy.Subscriber('/hub_0/sensor_1', SensorState, self.sensor_1_callback)
-        else:
+        elif self.SENSORS == DataCollectionMode.Digit:
             d0 = Digit(self.digit_serials[0]) # Unique serial number
             d0.connect()
             d0.set_resolution(Digit.STREAMS["QVGA"])
@@ -47,6 +56,15 @@ class DataBagger:
             d1.connect()
             d1.set_resolution(Digit.STREAMS["QVGA"])
             d1.set_fps(Digit.STREAMS["QVGA"]["fps"]["60fps"])
+        else:
+            d0 = Digit('D20235') # Unique serial number
+            d0.connect()
+            d0.set_resolution(Digit.STREAMS["QVGA"])
+            d0.set_fps(Digit.STREAMS["QVGA"]["fps"]["60fps"])
+
+            self.tactile_data_0 = (0, None)
+            self.tactile_0_sub = rospy.Subscriber('/hub_0/sensor_0', SensorState, self.sensor_0_callback)
+
 
         bridge = CvBridge()
 
@@ -84,9 +102,13 @@ class DataBagger:
 
             # bag = rosbag.Bag('./data_'+str(int(math.floor(time.time())))+".bag", 'w') 
             # rospy.loginfo('bag created')
-            if self.use_papilarray:
+            if self.SENSORS == DataCollectionMode.Contactile:
                 while self.tactile_data_0[1] == None or self.tactile_data_1[1] == None:
                     continue
+            elif self.SENSORS == DataCollectionMode.Both:
+                while self.tactile_data_0[1] == None:
+                    continue
+
             rospy.loginfo("Tactile running, node started")
                
             while not rospy.is_shutdown():
@@ -107,16 +129,17 @@ class DataBagger:
                             t1 = timeit.default_timer()
                             inRgb = qRgb.get().getCvFrame()  # blocking call, will wait until a new data has arrived
 
-                            if not self.use_papilarray:
+                            if self.SENSORS == DataCollectionMode.Digit:
                                 d0frame = d0.get_frame()
                                 d1frame = d1.get_frame()
 
-                                # cv2.imshow("d0frame", d0frame)
-                                # cv2.imshow("d1frame", d0frame)
-
-
                                 d0msg = bridge.cv2_to_imgmsg(d0frame)
                                 d1msg = bridge.cv2_to_imgmsg(d1frame)
+
+                            elif self.SENSORS == DataCollectionMode.Both:
+                                d0frame = d0.get_frame()
+                                d0msg = bridge.cv2_to_imgmsg(d0frame)
+
 
                             time_now = rospy.Time.from_sec(time.time())
                             header = Header()
@@ -126,7 +149,7 @@ class DataBagger:
                             # cv2.imshow("angle", inRgb)
                             # cv2.waitKey(1)
 
-                            if self.use_papilarray:
+                            if self.SENSORS == DataCollectionMode.Contactile:
                                 if prev_0 == self.tactile_data_0[0]:
                                     print("uh oh repeated data")
 
@@ -135,17 +158,25 @@ class DataBagger:
 
                                 prev_0 = self.tactile_data_0[0]
                                 prev_1 = self.tactile_data_1[0]
+                            elif self.SENSORS == DataCollectionMode.Both:
+                                if prev_0 == self.tactile_data_0[0]:
+                                    print("uh oh repeated data")
+
+                                prev_0 = self.tactile_data_0[0]
+                                
 
                             bag.write('time', header)
                             bag.write('image', cv_image) #Save an image
 
-                            if self.use_papilarray:
+                            if self.SENSORS == DataCollectionMode.Contactile:
                                 bag.write('tactile_0', self.tactile_data_0[1]) #save forces
                                 bag.write('tactile_1', self.tactile_data_1[1])
-                            else:
+                            elif self.SENSORS == DataCollectionMode.Digit:
                                 bag.write('digit_0', d0msg)
                                 bag.write('digit_1', d1msg)
-
+                            else:
+                                bag.write('tactile_0', self.tactile_data_0[1]) #save forces
+                                bag.write('digit_0', d0msg)
                             # cv2.imshow("rgb", inRgb)
 
                             # cv2.waitKey(1)

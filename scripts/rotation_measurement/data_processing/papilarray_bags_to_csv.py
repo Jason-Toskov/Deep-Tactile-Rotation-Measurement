@@ -13,8 +13,10 @@ from grasp_executor.msg import DataCollectState
 
 FILE_DIR = './'
 CSV_NAME = 'data'
-BAG_DIR = 'recorded_data_bags/'
-OUTPUT_DIR = 'recorded_data_csvs/'
+BAG_DIR = '../data_collection/recorded_data_bags/'
+OUTPUT_DIR = 'both_data_unpacked/'
+
+ONE_SENSOR_ONLY = True
 
 def init_df(df):
     cols_sensor = ['gfX', 'gfY', 'gfZ', 'gtX', 'gtY', 'gtZ', 'friction_est', 'target_grip_force']
@@ -78,7 +80,8 @@ def main(track_angle_srv, reset_angle_srv):
         time_data = [msg.stamp for _, msg, _ in bag.read_messages(topics=['time'])]
         image_data = [msg for _, msg, _ in bag.read_messages(topics=['image'])]
         tactile_data_0 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_0'])]
-        tactile_data_1 = [msg for _, msg, _ in bag.read_messages(topics=['tactile_1'])]
+        # second_tac_topic = 'tactile_0' if ONE_SENSOR_ONLY else 'tactile_1'
+        tactile_data_1 = copy.deepcopy(tactile_data_0) if ONE_SENSOR_ONLY else [msg for _, msg, _ in bag.read_messages(topics=['second_tac_topic'])]
 
         meta = [msg for _, msg, _ in bag.read_messages(topics=['metadata'])][0]
 
