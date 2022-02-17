@@ -2,6 +2,7 @@
 from asyncore import write
 import numpy as np
 import cv2
+
 USE_ROS = False
 if USE_ROS:
     import rospy
@@ -128,7 +129,7 @@ class AngleDetector:
         elif self.state == Quadrant.NE:
             temp_angle = -180 + temp_angle
 
-        if (self.prev_angle is None):
+        if self.prev_angle is None:
             self.angle = temp_angle
         elif abs(temp_angle - self.prev_angle) > 20:
             # very large change
@@ -196,29 +197,35 @@ class AngleDetector:
 
         image = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 
-        kernel = np.ones((2, 2), 'uint8')
-
+        kernel = np.ones((2, 2), "uint8")
 
         lower = np.array([0, 12, 66])
         upper = np.array([49, 64, 203])
 
         rgb_mask = cv2.inRange(result, lower, upper)
         rgb_mask = cv2.dilate(rgb_mask, kernel, iterations=1)
-        
+
         orange_mask = np.zeros(rgb_mask.shape)
 
         orange_contours, _ = cv2.findContours(
-                rgb_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            rgb_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
         )
         orange_contours = sorted(
             orange_contours, key=lambda el: cv2.contourArea(el), reverse=True
         )
 
-        M = cv2.moments(orange_contours[0])
-        center1 = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-        cv2.circle(canvas, center1, 2, (255, 255, 0), -1)
-        cv2.drawContours(orange_mask, orange_contours[:1], -1, 1, -1)
+        for index, i in enumerate(orange_contours):
 
+            M = cv2.moments(i)
+            _, (width, height), _ = cv2.minAreaRect(i)
+            ratio = (width / height) if width > height else (height / width)
+            print("ratio", ratio)
+            if ratio < 4:
+                continue
+            center1 = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            cv2.circle(canvas, center1, 2, (255, 255, 0), -1)
+            cv2.drawContours(orange_mask, orange_contours[index : index + 1], -1, 1, -1)
+            break
 
         lower = np.array([0, 181, 75])
         upper = np.array([0, 255, 112])
@@ -245,15 +252,11 @@ class AngleDetector:
 
         # (hMin = 0 , sMin = 62, vMin = 0), (hMax = 0 , sMax = 255, vMax = 85)
 
-        print(mask.shape, orange_mask.dtype)
         orange_mask = orange_mask.astype(np.uint8)
-        print(orange_mask.max(), orange_mask.min())
-        print(rgb_mask.max())
-        mask = cv2.subtract(mask + mask1 + mask2 + mask3, orange_mask*255)
+        mask = cv2.subtract(mask + mask1 + mask2 + mask3, orange_mask * 255)
         # mask = mask + mask1 + mask2 + mask3
 
         mask = cv2.dilate(mask, kernel, iterations=1)
-
 
         result = cv2.bitwise_and(result, result, mask=mask)
 
@@ -262,15 +265,15 @@ class AngleDetector:
             cv2.imshow("hsv", image)
             cv2.imshow("mask", mask)
             cv2.imshow("rgb_mask", rgb_mask)
-            cv2.imshow("orange_mask", orange_mask*255)
+            cv2.imshow("orange_mask", orange_mask * 255)
             cv2.imshow("result", result)
 
             cv2.waitKey(1)
 
         if self.writeImages:
-            cv2.imwrite("./wrote_ims/img_temp_"+str(self.count)+".jpeg", im)
-            cv2.imwrite("./wrote_ims/mask_"+str(self.count)+".jpeg", mask)
-            cv2.imwrite("./wrote_ims/result_"+str(self.count)+".jpeg", result)
+            cv2.imwrite("./wrote_ims/img_temp_" + str(self.count) + ".jpeg", im)
+            cv2.imwrite("./wrote_ims/mask_" + str(self.count) + ".jpeg", mask)
+            cv2.imwrite("./wrote_ims/result_" + str(self.count) + ".jpeg", result)
 
         contours = None
         if PYTHON3:
@@ -291,7 +294,6 @@ class AngleDetector:
             )
             contours.sort(key=lambda el: cv2.contourArea(el), reverse=True)
 
-
         M = cv2.moments(contours[0])
         center1 = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
         cv2.circle(canvas, center1, 2, (0, 255, 0), -1)
@@ -300,7 +302,7 @@ class AngleDetector:
         center2 = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
         cv2.circle(canvas, center2, 2, (0, 255, 0), -1)
 
-        cv2.drawContours(canvas, contours[:2], -1, (0,255,0), 3)
+        cv2.drawContours(canvas, contours[:2], -1, (0, 255, 0), 3)
 
         if self.angle is None:
             self.state_update(center1, center2)
@@ -336,7 +338,7 @@ class AngleDetector:
         self.videoWriter.write(vis)
 
         if self.writeImages:
-            cv2.imwrite("./wrote_ims/canvas_"+str(self.count)+".jpeg", canvas)
+            cv2.imwrite("./wrote_ims/canvas_" + str(self.count) + ".jpeg", canvas)
         if self.showImages:
             cv2.imshow("canvas", canvas)
             cv2.waitKey(1)
