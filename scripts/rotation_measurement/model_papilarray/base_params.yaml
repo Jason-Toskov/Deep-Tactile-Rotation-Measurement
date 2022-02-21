@@ -15,9 +15,9 @@ hidden_size: 500
 num_layers: 3
 dropout: 0.15
 
-data_path: './augmented_combined_dataset/'
+data_path: './weight_norm_augmented_combined_dataset/'
 plot_path: './results/'
-label_scale: 400
+label_scale: 90
 normalize: False
 sample: 'front'
 

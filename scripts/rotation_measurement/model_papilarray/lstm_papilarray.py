@@ -442,7 +442,7 @@ def main():
     run = wandb.init(project="velocity_papilarray",
                      entity="deep-tactile-rotatation-estimation",
                      config=cfg_input,
-                     notes= 'augmented combined dataset',
+                     notes= 'position kalman',
                      #  mode="disabled"
                      )
     # run = wandb.init(project="SRP", config=cfg_input)

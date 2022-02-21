@@ -23,7 +23,7 @@ bags-27-1-2022.zip
 *_digit_data_bags*
 *Ruler_data/
 *diverse_*
-augmented_*
+*augmented_*
 *_csvs*
 diverse_ims
 combined_dataset
@@ -36,3 +36,5 @@ wrote_ims
 rotation-detection-IROS-2021
 *_model_*
 *kube*
+
+test_kalman

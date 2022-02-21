@@ -4,7 +4,7 @@ import numpy as np, glob
 import matplotlib.pyplot as plt
 
 input_path = "./data_processing/new_cylinder_data_csvs/"
-output_path = "./data_processing/new_cylinder_data_csvs_filtered/"
+output_path = "./test_kalman/"
 
 for file in glob.glob(input_path + "*.csv"):
 
