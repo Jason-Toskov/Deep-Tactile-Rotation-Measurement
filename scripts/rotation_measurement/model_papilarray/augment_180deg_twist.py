@@ -1,30 +1,31 @@
 import glob, numpy as np
 from unicodedata import decimal
 from functools import reduce
-output_folder = "augmented_long_data_csvs_filtered"
-data_folder = "long_data_csvs_filtered"
+output_folder = "twist_long_data_csvs"
+data_folder = "long_data_csvs"
 
 def flatten(l):
     # this is a cool way to flatten a list of lists lol
     return sum(l, [])
 
-tactile_order = np.array([[8,7,6], [5,4,3], [2,1,0]])
+tactile_order = np.array([[0,1,2], [3,4,5], [6,7,8]])
 
 for i in glob.glob(data_folder + "/*.csv"):
 
-    for j in range(4):
+    for j in range(2):
         # to flip 90 degrees, we can transpose and flip the column ordering
         flip = np.array([[0,0,1], [0,1,0], [1,0,0]])
-        tactile_order = tactile_order.T @ flip
+        # do a 180 degree rotation
+        if j == 1:
+            tactile_order = tactile_order.T @ flip
+            tactile_order = tactile_order.T @ flip
         indices = tactile_order.flatten()
         new_file_name = i.replace(data_folder, output_folder)
-        new_file_name = new_file_name.replace(".csv", f"{j}.csv")
+        new_file_name = new_file_name.replace(".csv", f"_twist{j}.csv")
 
         with open(new_file_name, "w") as new_file:
         
             for line in open(i):
-
-
 
                 sample = line.split(",")
 
@@ -53,7 +54,9 @@ for i in glob.glob(data_folder + "/*.csv"):
                 sensor1_pillars = sorted(sensor1_pillars_reorder, key=lambda x: x[0])
                 sensor1_pillars = flatten(list(map(lambda x: list(x[1]), sensor1_pillars)))
 
-
-                data = sensor0_global_data + sensor0_pillars + sensor1_global_data + sensor1_pillars + final_data
+                if j == 0:
+                    data = sensor0_global_data + sensor0_pillars + sensor1_global_data + sensor1_pillars + final_data
+                else:
+                    data = sensor1_global_data + sensor1_pillars + sensor0_global_data + sensor0_pillars + final_data
 
                 new_file.write(",".join(data))
