@@ -18,12 +18,12 @@ warnings.filterwarnings("ignore")
 
 
 # current_bag = None
-SKIP_COUNT = 0
+SKIP_COUNT = 8
 
 FILE_DIR = './'
-CSV_NAME = 'green_spray_tape'
-BAG_DIR = 'cylinder_like_objects_bags/green_spray_data_bags_tape/'
-OUTPUT_DIR = 'new_data_csvs/'
+CSV_NAME = 'long'
+BAG_DIR = 'long_data_bags/'
+OUTPUT_DIR = 'long_data_csvs/'
 
 def init_df(df):
     cols_sensor = ['gfX', 'gfY', 'gfZ', 'gtX', 'gtY', 'gtZ', 'friction_est', 'target_grip_force']

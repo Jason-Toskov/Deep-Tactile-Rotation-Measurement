@@ -3,8 +3,8 @@ from filterpy.kalman import KalmanFilter
 import numpy as np, glob
 import matplotlib.pyplot as plt
 
-input_path = "./data_processing/new_cylinder_data_csvs/"
-output_path = "./test_kalman/"
+input_path = "./model_papilarray/augmented_long_data_csvs/"
+output_path = "./model_papilarray/augmented_long_data_csvs_filtered/"
 
 for file in glob.glob(input_path + "*.csv"):
 
@@ -27,6 +27,7 @@ for file in glob.glob(input_path + "*.csv"):
 
     velocity = []
     velocity_estimate = []
+    velocity_estimate_from_kalman = []
 
     pos = []
     pos_estimate = []
@@ -38,7 +39,7 @@ for file in glob.glob(input_path + "*.csv"):
     print(f"Starting file: {file}")
     for index,i in enumerate(open(file)):
         if index == 0:
-            output.append(f"{i.strip()},kalman_pos, kalman_vel")
+            output.append(f"{i.strip()},kalman_pos, kalman_vel, base_vel, vel_from_kal_pos")
             continue
 
         z = float(i.split(",")[-2])
@@ -47,6 +48,7 @@ for file in glob.glob(input_path + "*.csv"):
             # initial state
             f.x = np.array([z, 0.])
             prev_angle = z
+            prev_kalman_angle = f.x[0]
         else:
             f.predict()
 
@@ -55,14 +57,22 @@ for file in glob.glob(input_path + "*.csv"):
 
             velocity.append(f.x[1])        
             velocity_estimate.append((z - prev_angle) / (1/60))
+            velocity_estimate_from_kalman.append((f.x[0] - prev_kalman_angle) / (1/60))
 
             pos.append(f.x[0])
             pos_estimate.append(z)
 
-            prev_angle = z
+            
 
             # input()
-            output.append(f"{i.strip()},{f.x[0]},{f.x[1]}")
+            # output.append(f"{i.strip()},{f.x[0]},{f.x[1]}")
+            temp_vel_est = (z - prev_angle) / (1/60)
+            temp_vel_kal_est = (f.x[0] - prev_kalman_angle) / (1/60)
+            
+            output.append(f"{i.strip()},{f.x[0]},{f.x[1]},{temp_vel_est},{temp_vel_kal_est}") #store measured (noisy) velocity
+
+            prev_angle = z
+            prev_kalman_angle = f.x[0]
 
     x = open(output_path + 'kalman_' + file.split('/')[-1], "w")
     x.write("\n".join(output))
@@ -71,6 +81,7 @@ for file in glob.glob(input_path + "*.csv"):
     plt.subplot(1, 2, 1)
     plt.plot(velocity, label="kalman filter")
     plt.plot(velocity_estimate, label="measured")
+    plt.plot(velocity_estimate_from_kalman, label="derived from kalman pos")
     plt.legend()
 
 

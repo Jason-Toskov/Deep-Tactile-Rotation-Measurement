@@ -144,11 +144,11 @@ class TactileDataset(Dataset):
 
             else:
                 # only normalize angle
-                df_tensor = torch.Tensor(true_values[:, :-4]).float()
-                angle = true_values[:, -1] / self.label_scale
+                df_tensor = torch.Tensor(true_values[:, :-6]).float()
+                angle = true_values[:, -3] / self.label_scale
         else:
-            df_tensor = torch.Tensor(true_values[:, :-4]).float()
-            angle = true_values[:, -1] / self.label_scale
+            df_tensor = torch.Tensor(true_values[:, :-6]).float()
+            angle = true_values[:, -3] / self.label_scale
         # print(df_tensor.shape)
         # print(angle.shape)
         # input()
@@ -442,7 +442,7 @@ def main():
     run = wandb.init(project="velocity_papilarray",
                      entity="deep-tactile-rotatation-estimation",
                      config=cfg_input,
-                     notes= 'position kalman',
+                     notes= 'AUGMENTED velocity from long datapoints',
                      #  mode="disabled"
                      )
     # run = wandb.init(project="SRP", config=cfg_input)
@@ -543,10 +543,10 @@ def main():
             print("Epoch: %i, Test error: %f, Test loss: %f, Time taken: %.2f sec/epoch" %
                   (i, data.strechAngle(abs_error_test), loss_test, new_time-old_time))
             old_time = copy.deepcopy(new_time)
-            if abs_error_test < lowest_error:
+            if abs_error_train < lowest_error:
                 best_model_dict = copy.deepcopy(model.state_dict())
                 torch.save(best_model_dict, config["model_path"])
-                lowest_error = abs_error_test
+                lowest_error = abs_error_train
                 print("new best!")
 
         print("Lowest error was: %f" % (data.strechAngle(lowest_error)))

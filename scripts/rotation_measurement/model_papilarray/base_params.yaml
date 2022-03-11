@@ -3,7 +3,7 @@ test_only: False
 
 model_path: './results/best_model_1.pt'
 
-num_epochs: 400
+num_epochs: 200
 learning_rate: 0.0005
 weight_decay: 0.000001
 train_frac: 0.8
@@ -15,7 +15,7 @@ hidden_size: 500
 num_layers: 3
 dropout: 0.15
 
-data_path: './weight_norm_augmented_combined_dataset/'
+data_path: './augmented_long_data_csvs_filtered/'
 plot_path: './results/'
 label_scale: 90
 normalize: False

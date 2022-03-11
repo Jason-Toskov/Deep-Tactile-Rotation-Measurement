@@ -3,7 +3,7 @@ from asyncore import write
 import numpy as np
 import cv2
 
-USE_ROS = False
+USE_ROS = True
 if USE_ROS:
     import rospy
     from sensor_msgs.msg import Image
@@ -218,7 +218,10 @@ class AngleDetector:
 
             M = cv2.moments(i)
             _, (width, height), _ = cv2.minAreaRect(i)
-            ratio = (width / height) if width > height else (height / width)
+            if width == 0 or height == 0:
+                ratio = ratio
+            else:
+                ratio = (width / height) if width > height else (height / width)
             print("ratio", ratio)
             if ratio < 4:
                 continue
@@ -227,34 +230,38 @@ class AngleDetector:
             cv2.drawContours(orange_mask, orange_contours[index : index + 1], -1, 1, -1)
             break
 
-        lower = np.array([0, 181, 75])
-        upper = np.array([0, 255, 112])
-
+        lower = np.array([0, 85, 0])
+        upper = np.array([7, 255, 255])
         mask = cv2.inRange(image, lower, upper)
 
-        # lower1 = np.array([175, 85, 0])
-        # upper1 = np.array([180, 255, 255])
-
-        lower1 = np.array([175, 89, 0])
-        upper1 = np.array([180, 255, 200])
-
+        lower1 = np.array([175, 85, 0])
+        upper1 = np.array([180, 255, 255])
         mask1 = cv2.inRange(image, lower1, upper1)
 
-        lower2 = np.array([178, 0, 0])
-        upper2 = np.array([179, 255, 255])
 
-        mask2 = cv2.inRange(image, lower2, upper2)
 
-        lower3 = np.array([0, 62, 0])
-        upper3 = np.array([0, 255, 85])
+        # lower = np.array([0, 181, 75])
+        # upper = np.array([0, 255, 112])
+        # mask = cv2.inRange(image, lower, upper)
 
-        mask3 = cv2.inRange(image, lower3, upper3)
+        # lower1 = np.array([175, 89, 0])
+        # upper1 = np.array([180, 255, 200])
+        # mask1 = cv2.inRange(image, lower1, upper1)
+
+        # lower2 = np.array([178, 0, 0])
+        # upper2 = np.array([179, 255, 255])
+        # mask2 = cv2.inRange(image, lower2, upper2)
+
+        # lower3 = np.array([0, 62, 0])
+        # upper3 = np.array([0, 255, 85])
+        # mask3 = cv2.inRange(image, lower3, upper3)
 
         # (hMin = 0 , sMin = 62, vMin = 0), (hMax = 0 , sMax = 255, vMax = 85)
 
         orange_mask = orange_mask.astype(np.uint8)
-        mask = cv2.subtract(mask + mask1 + mask2 + mask3, orange_mask * 255)
-        # mask = mask + mask1 + mask2 + mask3
+        mask = cv2.subtract(mask + mask1, orange_mask * 255)
+        # mask = cv2.subtract(mask + mask1 + mask2 + mask3, orange_mask * 255)
+        # # # # mask = mask + mask1 + mask2 + mask3
 
         mask = cv2.dilate(mask, kernel, iterations=1)
 
