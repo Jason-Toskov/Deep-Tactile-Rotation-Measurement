@@ -17,7 +17,7 @@ from robotiq_2f_gripper_control.msg import (
 )
 import timeit
 
-from rotation_measurement.data_processing.blob_detector import AngleDetector
+from blob_detector import AngleDetector
 
 
 class AdaptiveController:
@@ -167,6 +167,7 @@ class AdaptiveController:
         if self.PUBLISH:
             print(command)
             self.gripper_pub.publish(command)
+            print('Published!')
 
     def gripper_state_callback(self, data):
         self.gripper_data = data
