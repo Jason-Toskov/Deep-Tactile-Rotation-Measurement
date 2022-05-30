@@ -1,3 +1,4 @@
 int8 mode
+int8 count
 ---
 sensor_msgs/PointCloud2 cloud

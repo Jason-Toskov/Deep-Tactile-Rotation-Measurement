@@ -11,8 +11,13 @@ from geometry_msgs.msg import PoseStamped
 import moveit_commander
 import moveit_msgs.msg
 from grasp_executor.srv import PCLStitch
-from scripts.util import move_ur5
-from scripts.grasping_demo.grasp_2_boxes import State
+
+import sys
+sys.path.append('/home/acrv/new_ws/src/grasp_executor/scripts')
+from util import move_ur5
+
+sys.path.append('/home/acrv/new_ws/src/grasp_executor/scripts/grasping_demo')
+from grasp_2_boxes import State
 
 import pdb
 
@@ -50,15 +55,22 @@ import pdb
 
 SCAN_JOINTS = {
     State.RIGHT_TO_LEFT: [
-        [0.12033622711896896, -1.4533870855914515, -1.5536163488971155, -1.747192684804098, 1.416150450706482, 1.6476819515228271],
-        [-0.7302053610431116, -1.9902375380145472, -0.9067710081683558, -2.4823296705829065, 2.159045696258545, 0.28434035181999207],
-        [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272],
+        [0.2759360373020172, -1.5467456022845667, -1.7605131308185022, -1.5162928740130823, 1.1972424983978271, 1.8678395748138428],
+        [-0.7540963331805628, -2.2400668303119105, -0.7652209440814417, -2.43374473253359, 2.186330556869507, 0.576158881187439],
+        [0.008503181859850883, -1.5707362333880823, -1.409212891255514, -1.7324321905719202, 1.5708622932434082, 0.008457492105662823],
+
+        # [0.12033622711896896, -1.4533870855914515, -1.5536163488971155, -1.747192684804098, 1.416150450706482, 1.6476819515228271],
+        # [-0.7302053610431116, -1.9902375380145472, -0.9067710081683558, -2.4823296705829065, 2.159045696258545, 0.28434035181999207],
+        # [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272],
     ],
     State.LEFT_TO_RIGHT: [
+        [0.4296517074108124, -1.4892523924456995, -1.7861769835101526, -1.3036845366107386, 1.8527971506118774, -1.122214142476217],
+        [1.0268604755401611, -2.1828349272357386, -0.758219067250387, -2.574660603200094, 1.1602318286895752, -0.36761790910829717],
+        [0.008503181859850883, -1.5707362333880823, -1.409212891255514, -1.7324321905719202, 1.5708622932434082, 0.008457492105662823],
         
-        [0.5746720433235168, -1.4123638311969202, -1.7548344771014612, -1.3990066687213343, 1.6094144582748413, -1.0251277128802698],
-        [0.8106227517127991, -1.684913460408346, -1.4413684050189417, -2.00739032426943, 1.2154176235198975, -0.5774405638324183],
-        [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272],
+        # [0.5746720433235168, -1.4123638311969202, -1.7548344771014612, -1.3990066687213343, 1.6094144582748413, -1.0251277128802698],
+        # [0.8106227517127991, -1.684913460408346, -1.4413684050189417, -2.00739032426943, 1.2154176235198975, -0.5774405638324183],
+        # [ 0.0030537303537130356,-1.5737221876727503, -1.4044225851642054, -1.7411778608905237, 1.6028796434402466, 0.03232145681977272],
     ]
 }
 
@@ -92,15 +104,40 @@ class PCLStitcher:
         self.pcl_rosmsg.header.stamp.secs = rospy.Time.now().secs
         self.pcl_rosmsg.header.stamp.nsecs = rospy.Time.now().nsecs
 
+    # -- Multi-view PCL --
+    # def generate_pcl(self, req):
+    #     rospy.loginfo("Reached PCL service")
+
+    #     time_start = rospy.Time.now()
+
+    #     for joints in SCAN_JOINTS[State(req.mode)]:
+    #         move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, joints, no_confirm=True)
+    #         rospy.sleep(1)
+    #         self.PCL_publisher.publish(self.pcl_rosmsg)
+
+    #     resp = self.assemble_scans(time_start, rospy.Time.now())
+
+    #     return resp.cloud
+
     def generate_pcl(self, req):
         rospy.loginfo("Reached PCL service")
 
         time_start = rospy.Time.now()
 
-        for joints in SCAN_JOINTS[State(req.mode)]:
-            move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, joints, no_confirm=True)
-            rospy.sleep(1)
-            self.PCL_publisher.publish(self.pcl_rosmsg)
+        view = req.count % 2
+        
+        # Joint positions
+        view_joints = SCAN_JOINTS[State(req.mode)][view]
+        home_joints = SCAN_JOINTS[State(req.mode)][-1]
+
+
+        move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, view_joints, no_confirm=True)
+        rospy.sleep(1)
+        
+        point_cloud = self.pcl_rosmsg
+        self.PCL_publisher.publish(self.pcl_rosmsg)
+        rospy.sleep(1)
+        move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, home_joints, no_confirm=True)
 
         resp = self.assemble_scans(time_start, rospy.Time.now())
 
