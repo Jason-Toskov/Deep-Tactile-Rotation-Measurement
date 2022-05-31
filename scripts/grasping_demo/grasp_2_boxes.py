@@ -15,6 +15,10 @@ from pyquaternion import Quaternion
 import rosbag
 import math
 import time, timeit
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
+
+from tf import TransformListener
 
 
 import moveit_commander
@@ -31,7 +35,7 @@ from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_output as out
 import sys
 sys.path.append('/home/acrv/new_ws/src/grasp_executor/scripts')
 from gripper import open_gripper_msg, close_gripper_msg, activate_gripper_msg, reset_gripper_msg
-from util import dist_to_guess, vector3ToNumpy, move_ur5
+from util import dist_to_guess, vector3ToNumpy, move_ur5, floatToMsg
 from grasp_executor.srv import PCLStitch
 
 
@@ -81,6 +85,8 @@ class GraspExecutor:
             State.RIGHT_TO_LEFT: [0.8463821411132812, -1.8050292173968714, -1.6474922339068812, -1.2900922934161585, 1.5956381559371948, 0.03232145681977272],
             State.LEFT_TO_RIGHT: [-0.42509586015810186, -1.805472199116842, -1.648043457661764, -1.2890384832965296, 1.595733642578125, 0.03230947256088257],
             }
+
+        # TODO: Create workspace
         self.workspaces = {
             State.RIGHT_TO_LEFT: [-0.568, -0.327, 0.174, 0.501, 0, 1],
             State.LEFT_TO_RIGHT: [-0.553, -0.327, -0.511, -0.179, 0, 1],
@@ -130,6 +136,20 @@ class GraspExecutor:
         # Agile grasp node
         rospy.Subscriber("/detect_grasps/grasps", GraspListMsg, self.agile_callback)
 
+        self.tf_listener_ = TransformListener()
+
+        # RGB Image
+        self.rgb_sub = rospy.Subscriber('/realsense/rgb', Image, self.rgb_callback)
+        self.cv_image = []
+        self.image_number = 0
+
+        # Depth Image
+        self.depth_sub = rospy.Subscriber('/realsense/depth', Image, self.depth_image_callback)
+        self.depth_image = []
+
+        self.bridge = CvBridge()
+        self.cv2Image = cv2Image = False
+
         # Data collection 
         collect_data_flag = raw_input("Collect data? (y or n): ")
         if collect_data_flag == "y":
@@ -142,6 +162,14 @@ class GraspExecutor:
         if self.collect_data:
             self.bag = rosbag.Bag('/home/acrv/new_ws/src/grasp_executor/scripts/grasping_demo/grasp_data_bags/data_' + str(int(math.floor(time.time()))) + ".bag", 'w')
 
+    def rgb_callback(self, image):
+        self.rgb_image = image
+        self.cv_image = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')
+        self.image_number += 1
+
+    def depth_image_callback(self, image):
+        self.depth_image = image
+    
     def agile_callback(self, data):
         self.agile_data = data
         self.agile_state = AGILE_STATE_TRANSITION[self.agile_state]
@@ -307,12 +335,15 @@ class GraspExecutor:
         drop_joints = self.drop_joints_no_box[state]if self.no_boxes else self.drop_joints[state]
         dropped_flag = False
 
-        #Move home
+        # Joint sequence
+        joints_to_move_to = [self.move_home_joints, self.stable_test_joints, self.move_home_joints]
+
+        # Move home
         self.move_group.set_start_state_to_current_state()
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.2)
 
-        #Grab object
+        # Grab object
         self.move_to_position(final_grasp_pose_offset, plan_offset)
         rospy.sleep(0.2)
         self.move_to_position(final_grasp_pose)
@@ -320,46 +351,67 @@ class GraspExecutor:
         self.command_gripper(close_gripper_msg())
         rospy.sleep(1)
 
-        #Move to drop position, checking if the object is dropped
+        # Lift up
         self.move_to_position(self.lift_up_pose())
         rospy.sleep(0.2)
 
-        joints_to_move_to = [self.move_home_joints, self.stable_test_joints, self.move_home_joints]
-
-        if self.gripper_data.gOBJ == 3:
-            success = 0
-            stable_success = False
-            dropped_flag = True
-            rospy.loginfo("Robot has missed/dropped object!")
-        else:
-            success = 1
-            dropped_flag = False
+        # Check grasp success
+        # Success
+        if self.check_grasp_success():
             rospy.loginfo("Robot has grasped the object!")
-            # Move 
+            success = 1
+            # Stability check 
+            rospy.loginfo("Checking stability")
             for joints in joints_to_move_to:
                 rospy.sleep(1)
                 self.move_to_joint_position(joints)
-                rospy.loginfo("Stable")
+            rospy.sleep(3)
+
             # Check if still in gripper (stable grasp)
-            if self.gripper_data.gOBJ == 3:
-                stable_success = False
+            if self.check_grasp_success():
+                stable_success = 1
+                dropped_flag = False
             else:
-                stable_success = True
+                stable_success = 0
+                dropped_flag = True
 
-        #Drop object
-        self.move_to_joint_position(drop_joints)
+            # Drop object
+            self.move_to_joint_position(drop_joints)
+            self.command_gripper(open_gripper_msg())
+            rospy.sleep(0.5)
+        # Fail
+        else:
+            rospy.loginfo("Robot has missed/dropped object!")
+            success = 0
+            stable_success = 0
+            dropped_flag = True
 
-        self.command_gripper(open_gripper_msg())
-        rospy.sleep(0.5)
+        # Move home    
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.2)
 
+        # Determine ur5 pose
+        # Listen to tf
+        self.tf_listener_.waitForTransform("/orange0", "/base_link", rospy.Time(), rospy.Duration(4))
+        (trans, rot) = self.tf_listener_.lookupTransform('/base_link', '/orange0', rospy.Time(0))
+        x_pos = trans[0]  # + x_noise
+        y_pos = trans[1]  # + y_noise
         ee_pose = final_grasp_pose # TODO: add offset
 
         # Save data
         self.data_saver(self.rgb_image, self.depth_image, final_grasp_pose, ee_pose, success, stable_success)
 
         return dropped_flag
+
+    def check_grasp_success(self):
+        if self.gripper_data.gOBJ == 2 and self.gripper_data.gPO < 255:
+            # Object in gripper
+            return True
+        else:
+            return False
+        # if self.gripper_data.gOBJ == 3:
+        #     # Object NOT in gripper
+            
 
     # Takes a joint array and returns a robot state
     def get_robot_state(self, joint_list):
@@ -380,20 +432,13 @@ class GraspExecutor:
         self.bag.write('time', header)
         self.bag.write('rgb_image', rgb_image)  # Save an image
         self.bag.write('depth_image', depth_image)
-        self.bag.write('ur5_pose', floatToMsg(ur5_pose)) #TODO: pose array to msg
-        self.bag.write('ee_pose', floatToMsg(ee_pose)) #TODO: pose array to msg
+        self.bag.write('ur5_pose', ur5_pose) #TODO: pose array to msg
+        self.bag.write('ee_pose', ee_pose) #TODO: pose array to msg
         self.bag.write('success', floatToMsg(success))
         self.bag.write('success', floatToMsg(stable_success))
 
-        rospy.loginfo("ur5_pose: %f", ur5_pose)
-        rospy.loginfo("ee_pose: %f", ee_pose)
         rospy.loginfo("Success: %f", success)
-        rospy.loginfo("Success: %f", stable_success)
-
-    def floatToMsg(data):
-        force_msg = Float64()
-        force_msg.data = data
-        return force_msg
+        rospy.loginfo("Stable Success: %f", stable_success)
 
     def main(self):
         rate = rospy.Rate(1)

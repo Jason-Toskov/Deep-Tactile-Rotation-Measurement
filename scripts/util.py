@@ -2,6 +2,7 @@ import numpy as np
 import moveit_commander
 from moveit_msgs.msg import DisplayTrajectory
 import rospy
+from std_msgs.msg import Header, Float64
 
 
 def dist_to_guess(p_base, guess):
@@ -41,3 +42,8 @@ def check_valid_plan(disp_traj_pub, robot, plan):
         run_flag = raw_input("Valid Trajectory [y to run]? or display path again [d to display]:")
 
     return True if run_flag == "y" else False
+
+def floatToMsg(data):
+    force_msg = Float64()
+    force_msg.data = data
+    return force_msg
