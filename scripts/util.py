@@ -2,7 +2,7 @@ import numpy as np
 import moveit_commander
 from moveit_msgs.msg import DisplayTrajectory
 import rospy
-from std_msgs.msg import Header, Float64
+from std_msgs.msg import Header, Float64, Float64MultiArray
 
 
 def dist_to_guess(p_base, guess):
@@ -47,3 +47,8 @@ def floatToMsg(data):
     force_msg = Float64()
     force_msg.data = data
     return force_msg
+
+def floatArrayToMsg(data):
+    array = Float64MultiArray()
+    array.data = data
+    return array
