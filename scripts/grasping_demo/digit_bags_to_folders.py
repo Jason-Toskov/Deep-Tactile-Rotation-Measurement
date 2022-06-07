@@ -30,19 +30,21 @@ def main():
             print('Unindexed bag'+bag_dir+' with i='+str(i)+' (total list length = '+str(num_data_points)+')')
 
         time_data = [msg.stamp for _, msg, _ in bag.read_messages(topics=['time'])]
-        object_id = [msg.stamp for _, msg, _ in bag.read_messages(topics=['object_id'])]
+        object_id = [msg for _, msg, _ in bag.read_messages(topics=['object_id'])]
         rgb_image = [msg for _, msg, _ in bag.read_messages(topics=['rgb_image'])]
         depth_image = [msg for _, msg, _ in bag.read_messages(topics=['depth_image'])]
+        point_cloud = [msg for _, msg, _ in bag.read_messages(topics=['point_cloud'])]
         trans = [msg for _, msg, _ in bag.read_messages(topics=['trans'])]
         rot = [msg for _, msg, _ in bag.read_messages(topics=['rot'])]
+        cam_info = [msg for _, msg, _ in bag.read_messages(topics=['cam_info'])]
         ur5_pose = [msg for _, msg, _ in bag.read_messages(topics=['ur5_pose'])]
         ee_pose = [msg for _, msg, _ in bag.read_messages(topics=['ee_pose'])]
         success = [msg for _, msg, _ in bag.read_messages(topics=['success'])]
         stable_success = [msg for _, msg, _ in bag.read_messages(topics=['stable_success'])]
 
-        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(trans),len(rot),len(ur5_pose), len(ee_pose), len(success))
+        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(point_cloud),len(trans),len(rot),len(cam_info),len(ur5_pose), len(ee_pose), len(success))
         
-        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(trans) == len(rot) == len(ur5_pose) == len(ee_pose) == len(success):
+        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(point_cloud) == len(trans) == len(rot) == len(cam_info) == len(ur5_pose) == len(ee_pose) == len(success):
             # #Folder naming convention is: <name>_<number of df>_<twist>_<gripperTwist>_<eeGroundRot>_<eeAirRot>_<gripperWidth>
             # folder = [FILE_DIR,OUTPUT_DIR,FOLDER_NAME,'_',num_data_points,'_',meta.gripperTwist,'_',meta.eeGroundRot,'_',meta.eeAirRot,'_',meta.gripperWidth]
             # folder = ''.join(list(map(str, folder)))
@@ -55,8 +57,16 @@ def main():
                 cv2_depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
                 cv2.imshow("rgb", cv2_rgb)
                 cv2.imshow("depth", cv2_depth)
-                print("object_id: ", object_id, "trans: ", trans, "rot: ", rot, "ur5_pose: ", ur5, "ee_pose: ", ee, "success: ", success)
-                cv2.waitKey(10)
+                # visualise point cloud
+                print("object_id: ", object_id)
+                print("trans: ", trans)
+                print("rot: ", rot)
+                print("cam_info: ", cam_info)
+                print("ur5_pose: ", ur5)
+                print("ee_pose: ", ee)
+                print("success: ", success)
+                prin("stable success: ", stable_success)
+                cv2.waitKey(5000)
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
 
