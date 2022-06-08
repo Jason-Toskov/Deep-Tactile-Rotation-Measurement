@@ -2,7 +2,7 @@ import numpy as np
 import moveit_commander
 from moveit_msgs.msg import DisplayTrajectory
 import rospy
-from std_msgs.msg import Header, Float64, Float64MultiArray
+from std_msgs.msg import Header, Float64, Float64MultiArray, Int64
 
 
 def dist_to_guess(p_base, guess):
@@ -12,6 +12,8 @@ def vector3ToNumpy(v):
     return np.array([v.x, v.y, v.z])
 
 def move_ur5(move_group, robot, disp_traj_pub, input, plan=None, no_confirm=False):
+    attempted = True
+
     if type(input) == list:
         move_group.set_joint_value_target(input)
     else:
@@ -24,9 +26,12 @@ def move_ur5(move_group, robot, disp_traj_pub, input, plan=None, no_confirm=Fals
         move_group.execute(plan, wait=True)
     else: 
         print("Plan is invalid!")
+        attempted = False
 
     move_group.stop()
     move_group.clear_pose_targets()
+
+    return attempted
 
 def show_motion(disp_traj_pub, robot, plan):
     display_trajectory = DisplayTrajectory()
@@ -45,6 +50,11 @@ def check_valid_plan(disp_traj_pub, robot, plan):
 
 def floatToMsg(data):
     force_msg = Float64()
+    force_msg.data = data
+    return force_msg
+
+def intToMsg(data):
+    force_msg = Int64()
     force_msg.data = data
     return force_msg
 
