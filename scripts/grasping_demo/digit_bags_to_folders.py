@@ -65,7 +65,7 @@ def main():
                 print("ur5_pose: ", ur5)
                 print("ee_pose: ", ee)
                 print("success: ", success)
-                prin("stable success: ", stable_success)
+                print("stable success: ", stable_success)
                 cv2.waitKey(5000)
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
