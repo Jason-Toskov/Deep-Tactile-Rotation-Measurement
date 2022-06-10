@@ -12,6 +12,9 @@ import copy
 import cv2
 from rosbag.bag import ROSBagUnindexedException
 
+import numpy as np
+import open3d as o3d
+
 FILE_DIR = './'
 FOLDER_NAME = 'grasp_data_bags'
 BAG_DIR = 'grasp_data_bags/'
@@ -37,36 +40,35 @@ def main():
         trans = [msg for _, msg, _ in bag.read_messages(topics=['trans'])]
         rot = [msg for _, msg, _ in bag.read_messages(topics=['rot'])]
         cam_info = [msg for _, msg, _ in bag.read_messages(topics=['cam_info'])]
-        ur5_pose = [msg for _, msg, _ in bag.read_messages(topics=['ur5_pose'])]
         ee_pose = [msg for _, msg, _ in bag.read_messages(topics=['ee_pose'])]
+        robot_pose = [msg for _, msg, _ in bag.read_messages(topics=['robot_pose'])]
         success = [msg for _, msg, _ in bag.read_messages(topics=['success'])]
         stable_success = [msg for _, msg, _ in bag.read_messages(topics=['stable_success'])]
 
-        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(point_cloud),len(trans),len(rot),len(cam_info),len(ur5_pose), len(ee_pose), len(success))
+        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(point_cloud),len(trans),len(rot),len(cam_info),len(robot_pose), len(ee_pose), len(success))
         
-        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(point_cloud) == len(trans) == len(rot) == len(cam_info) == len(ur5_pose) == len(ee_pose) == len(success):
+        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(point_cloud) == len(trans) == len(rot) == len(cam_info) == len(robot_pose) == len(ee_pose) == len(success):
             # #Folder naming convention is: <name>_<number of df>_<twist>_<gripperTwist>_<eeGroundRot>_<eeAirRot>_<gripperWidth>
             # folder = [FILE_DIR,OUTPUT_DIR,FOLDER_NAME,'_',num_data_points,'_',meta.gripperTwist,'_',meta.eeGroundRot,'_',meta.eeAirRot,'_',meta.gripperWidth]
             # folder = ''.join(list(map(str, folder)))
             # os.mkdir(folder)
 
             # digit_data_to_folder(folder, bridge, time_data, image_data, digit_data_0, digit_data_1, track_angle_srv)
-            for i, (time, rgb, depth, ur5, ee, success) in enumerate(itertools.izip(time_data, rgb_image, depth_image, ur5_pose, ee_pose, success)):
+            for i, (time, object_id, rgb, depth, point_cloud, trans, rot, cam_info, ee, robot, success, stable_success) in enumerate(itertools.izip(time_data, object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, ee_pose, robot_pose, success, stable_success)):
             # num_data_points += 1
                 cv2_rgb = bridge.imgmsg_to_cv2(rgb, desired_encoding="bgr8")
                 cv2_depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
                 cv2.imshow("rgb", cv2_rgb)
                 cv2.imshow("depth", cv2_depth)
-                # visualise point cloud
                 print("object_id: ", object_id)
                 print("trans: ", trans)
                 print("rot: ", rot)
                 print("cam_info: ", cam_info)
-                print("ur5_pose: ", ur5)
                 print("ee_pose: ", ee)
+                print("robot_pose: ", robot)
                 print("success: ", success)
                 print("stable success: ", stable_success)
-                cv2.waitKey(5000)
+                cv2.waitKey(10000)
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
 

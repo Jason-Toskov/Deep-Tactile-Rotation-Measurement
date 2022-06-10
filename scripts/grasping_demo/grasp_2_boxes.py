@@ -173,6 +173,9 @@ class GraspExecutor:
         self.PCL_publisher = rospy.Publisher("/my_cloud_in", PointCloud2, queue_size=1)
         self.PCL_reader = rospy.Subscriber("/realsense/cloud", PointCloud2, self.cloud_callback)
 
+        # Point cloud test
+        self.test_publisher = rospy.Publisher("/point_cloud_test", PointCloud2, queue_size=1)
+
         # Camera Info
         self.cam_info_reader = rospy.Subscriber("/realsense/camera_info", CameraInfo, self.cam_info_callback)
 
@@ -211,10 +214,13 @@ class GraspExecutor:
         self.object_id = int(raw_input("Enter object ID: "))
 
         # Resume 
+        self.attempt_counter = 0.0
+        self.success_counter = 0.0
+
         resume_data_flag = raw_input("New object? (y or n): ")
         if resume_data_flag == "n":
-            self.attempt_counter = raw_input("Number of attempts?: ")
-            self.success_counter = raw_input("Number of successes?: ")
+            self.attempt_counter = float(raw_input("Number of attempts?: "))
+            self.success_counter = float(raw_input("Number of successes?: "))
         else:
             rospy.loginfo("Beginning new object")
         
@@ -244,8 +250,8 @@ class GraspExecutor:
 
     def find_best_grasp(self, data, choose_random=True):
         timeout_time = 15 # in seconds
-        offset_dist = 0.1
-        max_angle = 90
+        offset_dist = 0.168
+        max_angle = 100
         final_grasp_pose = 0
         final_grasp_pose_offset = 0
 
@@ -260,14 +266,14 @@ class GraspExecutor:
                 # Worst to best
                 rospy.loginfo("Looking for BAD grasp")
                 data.grasps.sort(key=lambda x : x.score, reverse=False)
-                data.grasps = data.grasps[0:100]
+                # data.grasps = data.grasps[0:100]
             else:
                 # Best to worst
                 rospy.loginfo("Looking for GOOD grasp")
                 data.grasps.sort(key=lambda x : x.score, reverse=True)
-                data.grasps = data.grasps[0:100]
+                # data.grasps = data.grasps[0:100]
             #Shuffle grasps
-            random.shuffle(data.grasps)
+            # random.shuffle(data.grasps)
         else:
             # Sort grasps by quality
             if self.success_ratio > 0.5:
@@ -320,9 +326,9 @@ class GraspExecutor:
             p_base.pose.orientation.w = q[0]
 
             p_base_offset = copy.deepcopy(p_base)
-            p_base_offset.pose.position.x -= g.approach.x *offset_dist
-            p_base_offset.pose.position.y -= g.approach.y *offset_dist
-            p_base_offset.pose.position.z -= g.approach.z *offset_dist
+            p_base_offset.pose.position.x -= g.approach.x * offset_dist
+            p_base_offset.pose.position.y -= g.approach.y * offset_dist
+            p_base_offset.pose.position.z -= g.approach.z * offset_dist
 
             # Here we need to define the frame the pose is in for moveit
             p_base.header.frame_id = "base_link"
@@ -343,11 +349,11 @@ class GraspExecutor:
                 
                 # Check if plan to grasp is valid
                 self.move_group.set_start_state(self.move_home_robot_state)
-                self.move_group.set_pose_target(p_base)
-                plan_to_final = self.move_group.plan()
+                # self.move_group.set_pose_target(p_base)
+                # plan_to_final = self.move_group.plan()
 
                 # TODO: Change to cartesian planning
-                # (plan_to_final, fraction) = self.move_group.compute_cartesian_path([p_base.pose], 0.01, 0)
+                (plan_to_final, fraction) = self.move_group.compute_cartesian_path([p_base.pose], 0.01, 0)
 
                 self.move_group.clear_pose_targets()
 
@@ -356,24 +362,28 @@ class GraspExecutor:
 
                     # Check id plan to offset grasp pose is valid
                     self.move_group.set_start_state(self.move_home_robot_state)
-                    self.move_group.set_pose_target(p_base_offset)
-                    plan_offset = self.move_group.plan()
+                    # self.move_group.set_pose_target(p_base_offset)
+                    # plan_offset = self.move_group.plan()
 
                     # TODO: Change to cartesian planning
                     # (plan_offset, fraction) = self.move_group.compute_cartesian_path([p_base_offset.pose], 0.01, 0)
+                    (plan_offset, fraction) = self.move_group.compute_cartesian_path([p_base_offset.pose, p_base.pose], 0.01, 0)
+                    if fraction == 1:
+                        self.move_group.clear_pose_targets()
 
-                    self.move_group.clear_pose_targets()
-
-                    if plan_offset.joint_trajectory.points:
-                    # if plan_offset.joint_trajectory.points and fraction != 1:
-                        # If so, we've found the grasp to use
-                        final_grasp_pose = p_base
-                        final_grasp_pose_offset = p_base_offset
-                        rospy.loginfo("Final grasp found!")
-                        # rospy.loginfo(" Angle: %.4f",  theta_approach)
-                        # Only display the grasp being used
-                        poses = [poses[-1]]
-                        break
+                        if plan_offset.joint_trajectory.points:
+                        # if plan_offset.joint_trajectory.points and fraction != 1:
+                            # If so, we've found the grasp to use
+                            final_grasp_pose = p_base
+                            final_grasp_pose_offset = p_base_offset
+                            rospy.loginfo("Final grasp found!")
+                            # rospy.loginfo(" Angle: %.4f",  theta_approach)
+                            # Only display the grasp being used
+                            poses = [poses[-1]]
+                            break
+                        else:
+                            rospy.loginfo("Invalid path to final")
+                            num_bad_plan += 1
                     else:
                         rospy.loginfo("Invalid path to final")
                         num_bad_plan += 1
@@ -473,22 +483,28 @@ class GraspExecutor:
     def run_motion(self, state, final_grasp_pose_offset, plan_offset, final_grasp_pose):
         # Set based on state to either box
         # drop_joints = self.drop_joints_no_box[state]if self.no_boxes else self.drop_joints[state]
-        drop_joints = [0.0, -1.6211016813861292, -1.9219277540790003, -1.166889492665426, 1.5740699768066406, -4.7985707418263246e-05]
+        # LOW
+        # drop_joints = [0.0, -1.6211016813861292, -1.9219277540790003, -1.166889492665426, 1.5740699768066406, -4.7985707418263246e-05]
+        # HIGH
+        drop_joints = [0.0006587578682228923, -1.6023038069354456, -1.6482232252704065, -1.4663317839251917, 1.5763914585113525, 0.0005153216770850122]
 
         # Joint sequence
         joints_to_move_to = [self.move_home_joints, self.stable_test_joints, self.move_home_joints]
 
         # Move home
+        rospy.loginfo("Moving home...")
         self.move_group.set_start_state_to_current_state()
         self.move_to_joint_position(self.move_home_joints)
         rospy.sleep(0.2)
 
         # Grab object
-        offset_attempted = self.move_to_position(final_grasp_pose_offset, plan_offset)
+        rospy.loginfo("Moving to position...")
+        # offset_attempted = self.move_to_position(final_grasp_pose_offset, plan_offset)
+        offset_attempted = self.move_to_position(final_grasp_pose, plan_offset)
         rospy.sleep(0.2)
 
-        final_attempted = self.move_to_position(final_grasp_pose)
-        rospy.sleep(0.2)
+        # final_attempted = self.move_to_position(final_grasp_pose)
+        # rospy.sleep(0.2)
         self.command_gripper(close_gripper_msg())
         rospy.sleep(1)
 
@@ -498,7 +514,8 @@ class GraspExecutor:
 
         attempted_grasp = True
 
-        if offset_attempted and final_attempted:
+        # if offset_attempted and final_attempted:
+        if offset_attempted:
             # Check grasp success
             # Success
             if self.check_grasp_success():
@@ -514,13 +531,11 @@ class GraspExecutor:
                 # Check if still in gripper (stable grasp)
                 if self.check_grasp_success():
                     stable_success = 1
+                    # Drop object
+                    self.move_to_joint_position(drop_joints)
                 else:
                     stable_success = 0
-
-                # Drop object
-                self.move_to_joint_position(drop_joints)
-                self.command_gripper(open_gripper_msg())
-                rospy.sleep(0.5)
+                    rospy.loginfo("Grasp was not stable!")
             # Fail
             else:
                 rospy.loginfo("Robot has missed/dropped object!")
@@ -531,6 +546,10 @@ class GraspExecutor:
             rospy.loginfo("Robot could not plan!")
             success = 0
             stable_success = 0
+
+        # Open gripper
+        self.command_gripper(open_gripper_msg())
+        rospy.sleep(0.5)
 
         # Move home    
         self.move_to_joint_position(self.move_home_joints)
@@ -640,7 +659,7 @@ class GraspExecutor:
         robot_state.joint_state = joint_state
         return robot_state
 
-    def data_saver(self, object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, ur5_pose, ee_pose, success, stable_success):
+    def data_saver(self, object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, ee_pose, robot_pose, success, stable_success):
         time_now = rospy.Time.from_sec(time.time())
         header = Header()
         header.stamp = time_now
@@ -654,8 +673,8 @@ class GraspExecutor:
         self.bag.write('trans', floatArrayToMsg(trans))
         self.bag.write('rot', floatArrayToMsg(rot))
         self.bag.write('cam_info', cam_info)
-        self.bag.write('ur5_pose', ur5_pose) 
-        self.bag.write('ee_pose', ee_pose) 
+        self.bag.write('ee_pose', ee_pose)
+        self.bag.write('robot_pose', robot_pose) 
         self.bag.write('success', intToMsg(success))
         self.bag.write('stable_success', intToMsg(stable_success))
 
@@ -698,45 +717,37 @@ class GraspExecutor:
 
         # Counters
         view_counter = 0
-        attempt_counter = 0.0
-        success_counter = 0.0
+        # attempt_counter = 0.0
+        # success_counter = 0.0
 
         rospy.set_param("/detect_grasps/workspace", ws_curr)
 
         # TEST
-        #Create poses for grasp and pulled back (offset) grasp
-        p_test = PoseStamped()
+        # Create poses for grasp and pulled back (offset) grasp
+        # p_test = PoseStamped()
 
-        p_test.pose.position.x = -0.421952313397
-        p_test.pose.position.y = 0.131242821475
-        p_test.pose.position.z = 0.0404421711525
+        # p_test.header.frame_id = "base_link"
 
-        p_test.pose.orientation.x = 0.275744177369
-        p_test.pose.orientation.y = 0.438289931938
-        p_test.pose.orientation.z = -0.572406335039
-        p_test.pose.orientation.w = 0.635781465454
+        # p_test.pose.position.x = -0.438689267808
+        # p_test.pose.position.y = 0.0822754383621
+        # p_test.pose.position.z = 0.0480537936612
 
-        rospy.loginfo("Moving to test pose...")
-        self.move_to_position(p_test)
-        rospy.sleep(10)
+        # p_test.pose.orientation.x = -0.286694914126
+        # p_test.pose.orientation.y = 0.43907951135
+        # p_test.pose.orientation.z = 0.512032452111
+        # p_test.pose.orientation.w = 0.680321965625
 
-        #         ('ur5_pose: ', header: 
-        # seq: 0
-        # stamp: 
-        #     secs: 0
-        #     nsecs:         0
-        # frame_id: "base_link"
-        # pose: 
-        # position: 
-        #     x: -0.421952313397
-        #     y: 0.131242821475
-        #     z: 0.0404421711525
-        # orientation: 
-        #     x: 0.275744177369
-        #     y: 0.438289931938
-        #     z: -0.572406335039
-        #     w: 0.635781465454)
+        # rospy.loginfo("Moving to test pose...")
+        # self.move_to_position(p_test)
+        # rospy.sleep(5)
 
+        # p_test.pose.position.x = -0.453820003242
+        # p_test.pose.position.y = 0.00752717770364
+        # p_test.pose.position.z = 0.197746005796
+
+        # rospy.loginfo("Moving to test pose...")
+        # self.move_to_position(p_test)
+        # rospy.sleep(5)
 
         while not rospy.is_shutdown():
             
@@ -786,8 +797,10 @@ class GraspExecutor:
             point_cloud = self.pcl_rosmsg
             rospy.sleep(1)
 
+            self.test_publisher.publish(point_cloud)
+
             # Listen to tf
-            self.tf_listener_.waitForTransform("/camera_link", "/base_link", rospy.Time(), rospy.Duration(4))
+            self.tf_listener_.waitForTransform("/base_link", "/camera_link", rospy.Time(), rospy.Duration(4))
             (trans, rot) = self.tf_listener_.lookupTransform('/base_link', '/camera_link', rospy.Time(0))
 
             # Camera intrinsics
@@ -815,32 +828,29 @@ class GraspExecutor:
 
                 if attempted_grasp:
                     # Counter
-                    attempt_counter = attempt_counter + 1
+                    self.attempt_counter = self.attempt_counter + 1
                     if stable_success:
-                        success_counter = success_counter + 1
+                        self.success_counter = self.success_counter + 1
 
-                    # Determine ur5 pose
-                    ee_pose = copy.deepcopy(final_grasp_pose)
-
-                    ee_pose.pose.position.x = ee_pose.pose.position.x - 0.168
+                    # Determine ur5 pose -> final_grasp_pose_offset
                     
                     # Save data
-                    self.data_saver(self.object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, final_grasp_pose, ee_pose, success, stable_success)
+                    self.data_saver(self.object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, final_grasp_pose, final_grasp_pose_offset, success, stable_success)
 
                     # Close bag
                     self.bag.close()
                     
                     # Adjust ratio
-                    self.success_ratio = success_counter / attempt_counter
+                    self.success_ratio = self.success_counter / self.attempt_counter
 
-                    if (attempt_counter % 50 == 0):
+                    if (self.attempt_counter % 50 == 0):
                         # Change object
                         rospy.loginfo("\nPrevious Object ID: %d", self.object_id)
                         self.object_id = self.object_id + 1
                         rospy.loginfo("\nNew Object ID: %d", self.object_id)
                         raw_input("\n\n\nPlace object and press enter...")
                         break
-                    elif (attempt_counter % 25 == 0):
+                    elif (self.attempt_counter % 25 == 0):
                         # Change Change to random
                         raw_input("\n\n\nLeave object in random position and press enter...")
 
@@ -853,15 +863,17 @@ class GraspExecutor:
 
             # Move back home
             rospy.loginfo("Moving home...")
+            self.move_group.set_start_state_to_current_state()
             self.move_to_joint_position(self.move_home_joints)
+            rospy.sleep(1)
             self.command_gripper(open_gripper_msg())
             rospy.loginfo("Adjust object")
             rospy.sleep(3)
 
             # Print progress
             rospy.loginfo(" -------------------------- ")
-            rospy.loginfo("Attempt counter: %d", attempt_counter)
-            rospy.loginfo("Success counter: %d", success_counter)
+            rospy.loginfo("Attempt counter: %f", self.attempt_counter)
+            rospy.loginfo("Success counter: %f", self.success_counter)
             rospy.loginfo(" -------------------------- ")
             
             rate.sleep()
@@ -892,7 +904,8 @@ if __name__ == '__main__':
 
 
 
-
+# [-1.6482232252704065, -1.6023038069354456, 0.0006587578682228923, -1.4663317839251917, 1.5763914585113525, 0.0005153216770850122]
+[0.0006587578682228923, -1.6023038069354456, -1.6482232252704065, -1.4663317839251917, 1.5763914585113525, 0.0005153216770850122]
 
 # ['shoulder_pan_joint', 'shoulder_lift_joint',  'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
