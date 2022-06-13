@@ -51,7 +51,8 @@ class RotationMeasurer():
         self.grasp_loc_offset_pose.pose.position.z += self.offset_z
 
 
-        self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/4]
+        # self.in_air_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/4]
+        self.in_air_pertubation_angles_coeff = [0]
         # self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, PI/4, PI/3, -PI/12, -PI/6]
         self.on_ground_pertubation_angles_coeff = [0, PI/12, PI/6, -PI/12, -PI/6]
         # self.on_ground_pertubation_angles_coeff = [PI/3]
@@ -60,16 +61,112 @@ class RotationMeasurer():
         # self.close_width = 175
         # self.slip_width = 163
 
-        # for the deoderant
-        # self.close_width = 223
-        # self.slip_width = 90
+        ##### Tape data #####
+
+        # Toothpaste
+        # self.close_width = 162
+        # self.slip_width = 150
+
+        # Toothbrush
+        # self.close_width = 170
+        # self.slip_width = 158
+
+        # Breadboard
+        # self.close_width = 195
+        # self.slip_width = 189
+
+        # Magnet box
+        # self.close_width = 125
+        # self.slip_width = 112
+
+        # Earbud box
+        # self.close_width = 150
+        # self.slip_width = 136
+
+        # Shampoo 3d print
+        # self.close_width = 90
+        # self.slip_width = 79
+
+        # Spray bottle 3d print
+        # self.close_width = 125
+        # self.slip_width = 114
+
+        # Pill bottle
+        # self.close_width = 68
+        # self.slip_width = 57
+
+        # Swiss bottle
+        # self.close_width = 115
+        # self.slip_width = 105
+
+        # Deodorant can
+        # self.close_width = 90
+        # self.slip_width = 82
+
+
+
+        ##### No tape data #####
+
+        # Toothpaste
+        # self.close_width = 162
+        # self.slip_width = 150
+
+        # Toothbrush
+        # self.close_width = 170
+        # self.slip_width = 158
+
+        # Earbud box
+        # self.close_width = 150
+        # self.slip_width = 136
+
+        # Breadboard
+        # self.close_width = 195
+        # self.slip_width = 189
+
+        # Magnet box
+        # self.close_width = 125
+        # self.slip_width = 112
+
+        # Shampoo 3d print
+        # self.close_width = 90
+        # self.slip_width = 79
+
+        # Pill bottle
+        # self.close_width = 68
+        # self.slip_width = 57
+
+        # Swiss bottle
+        # self.close_width = 115
+        # self.slip_width = 105
+
+        # Deodorant can
+        # self.close_width = 90
+        # self.slip_width = 82
+
+        # Spray bottle 3d print
+        # self.close_width = 125
+        # self.slip_width = 114
+
+        ##### Unseen objects #####
+
+        # USB-C box
+        # self.close_width = 171
+        # self.slip_width = 160
+
+        # Hand sanitiser
+        # self.close_width = 132
+        # self.slip_width = 125
+
+        # Moisturiser
+        # self.close_width = 130
+        # self.slip_width = 117
 
         ### Gripped width code
 
-        self.close_width = 140###
+        self.close_width = 125
 
-        self.loosest_grasp = 127
-        self.tightest_grasp = 127
+        self.loosest_grasp = 114
+        self.tightest_grasp = 114
         self.num_step = 1
 
         self.skip_count = 0
@@ -155,9 +252,9 @@ class RotationMeasurer():
         rospy.loginfo("Moved to Home Position")
         count = 0
         while not rospy.is_shutdown():
-            for wrist_orientation in [0, PI]: ## TODO: check if pi should be positive or negative
+            for wrist_orientation in [0]:#[0, PI]:
                 offset_joints = copy.deepcopy(self.grasp_loc_offset_joints)
-                offset_joints[5] += wrist_orientation ##TODO get the correct element here, and then check that the rotations are right
+                offset_joints[5] += wrist_orientation 
 
                 for width in np.round(np.linspace(self.loosest_grasp, self.tightest_grasp+1, num=self.num_step)).astype(np.uint8):
                     for ground_angle_peturb in self.on_ground_pertubation_angles_coeff:
@@ -255,10 +352,11 @@ class RotationMeasurer():
                             # Pause and wait for user to say rotation is done
                             raw_input("Press enter when object is fully rotated: ")
 
+                            rospy.sleep(1)
                             # End data collection (by publishing a stop to the topic)
                             collection_info.data = False
                             self.collect_data_pub.publish(collection_info)
-                            rospy.sleep(1)
+                            rospy.sleep(0.5)
 
                             # Drop object completely
                             self.command_gripper(open_gripper_msg())

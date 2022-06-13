@@ -106,46 +106,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          box_2_lhs_back_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_front_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_left_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_right_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_back_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_front_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_left_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_right_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
           camera:
             Alpha: 1
             Show Axes: false
@@ -292,46 +252,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          box_2_lhs_back_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_front_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_left_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_lhs_right_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_back_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_front_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_left_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          box_2_rhs_right_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
           camera:
             Alpha: 1
             Show Axes: false
@@ -432,7 +352,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -447,7 +367,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz/TF
       Enabled: false
       Frame Timeout: 15
@@ -534,25 +454,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.4357199668884277
+      Distance: 2.4446041584014893
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.44283366203308105
-        Y: 0.03837592527270317
-        Z: 0.0034612775780260563
+        X: -0.6426026821136475
+        Y: 0.008379810489714146
+        Z: -0.09031091630458832
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6847963929176331
+      Pitch: 0.3447965383529663
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.1285512447357178
+      Yaw: 4.648548603057861
     Saved: ~
 Window Geometry:
   Displays:

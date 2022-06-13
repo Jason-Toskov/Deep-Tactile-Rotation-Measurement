@@ -50,6 +50,7 @@ find_package(catkin REQUIRED
 add_message_files(
   FILES
   DataCollectState.msg
+  ControllerData.msg
 )
 
 ## Generate services in the 'srv' folder

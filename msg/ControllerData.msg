@@ -1,0 +1,4 @@
+int32 closeWidth
+float32 targetRotationAngle
+string modelType
+string objectType

@@ -36,7 +36,7 @@ class DataBagger:
         camRgb.setPreviewSize(1920, 1080)
         camRgb.setInterleaved(False)
         camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
-        camRgb.setFps(60)
+        camRgb.setFps(30)
         
 
         # print(dir(camRgb.properties))
@@ -61,14 +61,23 @@ class DataBagger:
 
             controlQueue = device.getInputQueue('control')
             ctrl = dai.CameraControl()
-            ctrl.setManualFocus(132)
+            # ctrl.setManualFocus(132)
+            # ctrl.setManualFocus(150)
+            # ctrl.setAutoFocusMode(dai.Raw)
+            # ctrl.setManualFocus(139)
             controlQueue.send(ctrl)
 
 
             # Output queue will be used to get the rgb frames from the output defined above
             qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+            i=1
             while True:
                 inRgb = qRgb.get().getCvFrame()  # blocking call, will wait until a new data has arrived
+                cv2.imwrite('./out_folder/curr_output_'+str(i)+'.png', inRgb)
+                # if i == 9:
+                #     cv2.imwrite('./obj_images/boxes_and_cylinders.png', inRgb)
+                #     print('done!')
+                i += 1
 
                 arucoDict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100)
 
@@ -85,8 +94,8 @@ class DataBagger:
                     r_mat, _ = cv2.Rodrigues(rvec)
                     rotation = R.from_matrix(r_mat)
                     print("rotation", rotation.as_euler("xyz", degrees=True))
-                    cv2.imshow("rgb", inRgb)
-                    cv2.waitKey(0)
+                    # cv2.imshow("rgb", inRgb)
+                    # cv2.waitKey(0)
                 else:
 
                     for rejected in rejected_img_points:
@@ -96,8 +105,8 @@ class DataBagger:
                         cv2.line(inRgb, tuple(rejected[2]), tuple(rejected[3]), (0, 0, 255), thickness=2)
                         cv2.line(inRgb, tuple(rejected[3]), tuple(rejected[0]), (0, 0, 255), thickness=2)
 
-                    cv2.imshow("rgb", inRgb)
-                    cv2.waitKey(1)
+                    # cv2.imshow("rgb", inRgb)
+                    # cv2.waitKey(1)
 
                 # print(rvec, corners, ids)
 
