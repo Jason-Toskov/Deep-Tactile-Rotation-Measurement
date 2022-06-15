@@ -25,6 +25,7 @@ import moveit_msgs.msg
 from std_msgs.msg import Header
 from moveit_msgs.msg import DisplayTrajectory, MoveGroupActionFeedback, RobotState
 from sensor_msgs.msg import JointState, PointCloud2
+import sensor_msgs.point_cloud2 as pc2
 from actionlib_msgs.msg import GoalStatusArray
 from agile_grasp2.msg import GraspListMsg
 from geometry_msgs.msg import PoseStamped, WrenchStamped, PoseArray
@@ -57,6 +58,20 @@ sys.path.append('/home/acrv/new_ws/src/grasp_executor/scripts/grasping_demo')
 
 import pdb
 
+import open3d as o3d
+
+from ctypes import * # convert float to uint32
+
+import tf2_ros
+import tf2_py as tf2
+from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
+
+convert_rgbUint32_to_tuple = lambda rgb_uint32: (
+    (rgb_uint32 & 0x00ff0000)>>16, (rgb_uint32 & 0x0000ff00)>>8, (rgb_uint32 & 0x000000ff)
+)
+convert_rgbFloat_to_tuple = lambda rgb_float: convert_rgbUint32_to_tuple(
+    int(cast(pointer(c_float(rgb_float)), POINTER(c_uint32)).contents.value)
+)
 
 class State(IntEnum):
     BOOTUP=0
@@ -100,7 +115,8 @@ class GraspExecutor:
         self.pose_2 = [0.0, -2.110682789479391, -0.23039132753481084, -2.8553083578692835, 1.5699286460876465, -3.5587941304981996e-05]
         self.pose_3 = [-0.5584028402911585, -2.0729802290545862, -0.40200978914369756, -2.636850659047262, 2.227617025375366, 0.8789638876914978]
         self.pose_4 = [0.7862164974212646, -2.1710355917560022, -0.403877083455221, -2.9715493361102503, 1.0643872022628784, -0.5000680128680628]
-        self.view_joints = [self.pose_1, self.pose_2, self.pose_3, self.pose_4]
+        # self.view_joints = [self.pose_1, self.pose_2, self.pose_3, self.pose_4]
+        self.view_joints = [self.pose_2, self.pose_3, self.pose_4]
 
         self.drop_joints = {
             State.RIGHT_TO_LEFT: [0.8464177250862122, -1.7617242972003382, -1.3163345495807093, -1.664525334035055, 1.5956381559371948, 0.03218962997198105],
@@ -182,6 +198,9 @@ class GraspExecutor:
         # TF Listener
         self.tf_listener_ = TransformListener()
 
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(12))
+        self.tl = tf2_ros.TransformListener(self.tf_buffer)
+
         # Agile grasp node
         rospy.Subscriber("/detect_grasps/grasps", GraspListMsg, self.agile_callback)
 
@@ -250,10 +269,12 @@ class GraspExecutor:
 
     def find_best_grasp(self, data, choose_random=True):
         timeout_time = 15 # in seconds
-        offset_dist = 0.168
+        robot_dist = 0.168
+        offset_dist = 0.1
         max_angle = 100
         final_grasp_pose = 0
         final_grasp_pose_offset = 0
+        robot_pose = 0
 
         num_bad_angle = 0
         num_bad_plan = 0
@@ -267,11 +288,13 @@ class GraspExecutor:
                 rospy.loginfo("Looking for BAD grasp")
                 data.grasps.sort(key=lambda x : x.score, reverse=False)
                 # data.grasps = data.grasps[0:100]
+                noise = (self.success_ratio - 0.5) * 0.05
             else:
                 # Best to worst
                 rospy.loginfo("Looking for GOOD grasp")
                 data.grasps.sort(key=lambda x : x.score, reverse=True)
                 # data.grasps = data.grasps[0:100]
+                noise = 0.0
             #Shuffle grasps
             # random.shuffle(data.grasps)
         else:
@@ -316,9 +339,9 @@ class GraspExecutor:
             #Create poses for grasp and pulled back (offset) grasp
             p_base = PoseStamped()
 
-            p_base.pose.position.x = position.x 
-            p_base.pose.position.y = position.y 
-            p_base.pose.position.z = position.z 
+            p_base.pose.position.x = position.x + noise
+            p_base.pose.position.y = position.y + noise
+            p_base.pose.position.z = position.z + noise
 
             p_base.pose.orientation.x = q[1]
             p_base.pose.orientation.y = q[2]
@@ -330,9 +353,15 @@ class GraspExecutor:
             p_base_offset.pose.position.y -= g.approach.y * offset_dist
             p_base_offset.pose.position.z -= g.approach.z * offset_dist
 
+            p_base_robot = copy.deepcopy(p_base)
+            p_base_robot.pose.position.x -= g.approach.x * robot_dist
+            p_base_robot.pose.position.y -= g.approach.y * robot_dist
+            p_base_robot.pose.position.z -= g.approach.z * robot_dist
+
             # Here we need to define the frame the pose is in for moveit
             p_base.header.frame_id = "base_link"
             p_base_offset.header.frame_id = "base_link"
+            p_base_robot.header.frame_id = "base_link"
 
             # Used for visualization
             poses.append(copy.deepcopy(p_base.pose))
@@ -376,6 +405,7 @@ class GraspExecutor:
                             # If so, we've found the grasp to use
                             final_grasp_pose = p_base
                             final_grasp_pose_offset = p_base_offset
+                            robot_pose = p_base_robot
                             rospy.loginfo("Final grasp found!")
                             # rospy.loginfo(" Angle: %.4f",  theta_approach)
                             # Only display the grasp being used
@@ -408,7 +438,7 @@ class GraspExecutor:
             plan_offset = 0
             rospy.loginfo("No valid grasp found!")
 
-        return final_grasp_pose_offset, plan_offset, final_grasp_pose
+        return final_grasp_pose_offset, plan_offset, final_grasp_pose, robot_pose
 
     # Use class variables to move to a pose
     def move_to_position(self, grasp_pose, plan=None):
@@ -682,6 +712,16 @@ class GraspExecutor:
         rospy.loginfo("Success: %d", success)
         rospy.loginfo("Stable Success: %d", stable_success)
 
+    def get_transform(self):
+        got_trans = False
+        while not got_trans:
+            try:
+                trans = self.tf_buffer.lookup_transform('base_link', 'camera_link', rospy.Time.now(), rospy.Duration(1.0))
+                got_trans = True
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                rate.sleep(1)
+        return trans
+
     def main(self):
         # Startup
         rate = rospy.Rate(1)
@@ -724,30 +764,30 @@ class GraspExecutor:
 
         # TEST
         # Create poses for grasp and pulled back (offset) grasp
-        # p_test = PoseStamped()
+        p_test = PoseStamped()
 
-        # p_test.header.frame_id = "base_link"
+        p_test.header.frame_id = "base_link"
 
-        # p_test.pose.position.x = -0.438689267808
-        # p_test.pose.position.y = 0.0822754383621
-        # p_test.pose.position.z = 0.0480537936612
+        p_test.pose.position.x = -0.499575960768
+        p_test.pose.position.y = 0.0349784804409
+        p_test.pose.position.z = 0.039447361082
 
-        # p_test.pose.orientation.x = -0.286694914126
-        # p_test.pose.orientation.y = 0.43907951135
-        # p_test.pose.orientation.z = 0.512032452111
-        # p_test.pose.orientation.w = 0.680321965625
+        p_test.pose.orientation.x = -0.166033880986
+        p_test.pose.orientation.y = 0.496979279168
+        p_test.pose.orientation.z = 0.264681925683
+        p_test.pose.orientation.w = 0.809560266231
 
-        # rospy.loginfo("Moving to test pose...")
-        # self.move_to_position(p_test)
-        # rospy.sleep(5)
+        rospy.loginfo("Moving to test pose...")
+        self.move_to_position(p_test)
+        rospy.sleep(5)
 
-        # p_test.pose.position.x = -0.453820003242
-        # p_test.pose.position.y = 0.00752717770364
-        # p_test.pose.position.z = 0.197746005796
+        p_test.pose.position.x = -0.561048865731
+        p_test.pose.position.y = -0.00929307166114
+        p_test.pose.position.z = 0.189397724969
 
-        # rospy.loginfo("Moving to test pose...")
-        # self.move_to_position(p_test)
-        # rospy.sleep(5)
+        rospy.loginfo("Moving to test pose...")
+        self.move_to_position(p_test)
+        rospy.sleep(5)
 
         while not rospy.is_shutdown():
             
@@ -762,7 +802,8 @@ class GraspExecutor:
             view_joint = self.view_joints[view_counter]
             # Increment view counter
             view_counter = view_counter + 1
-            view_counter = view_counter % 4
+            # view_counter = view_counter % 4
+            view_counter = view_counter % 3
 
             # Move UR5
             move_ur5(self.move_group, self.robot, self.display_trajectory_publisher, view_joint, no_confirm=True)
@@ -775,17 +816,26 @@ class GraspExecutor:
                 time_start = rospy.Time.now()
                 rospy.sleep(1)
                 raw_point_cloud = self.pcl_rosmsg
+                # point_cloud = copy.deepcopy(raw_point_cloud)
                 rospy.sleep(1)
+
                 # Publish to assembler
-                self.PCL_publisher.publish(raw_point_cloud)
-                # Assemble
-                resp = self.assemble_scans(time_start, rospy.Time.now())
+                # self.PCL_publisher.publish(raw_point_cloud)
+                # Assemble 
+                # resp = self.assemble_scans(time_start, rospy.Time.now())
+
+                # Transform
+                trans = self.get_transform()
+                point_cloud = do_transform_cloud(raw_point_cloud, trans)
+
                 # Point Cloud
                 rospy.loginfo("Point cloud generated")
 
-                if len(resp.cloud.data) > 0:
+                # if len(resp.cloud.data) > 0:
+                if len(point_cloud.data) > 0:
                     # Publish to agilegrasp
-                    self.PCL_stitched_publisher.publish(resp.cloud)
+                    # self.PCL_stitched_publisher.publish(resp.cloud)
+                    self.PCL_stitched_publisher.publish(point_cloud)
                     valid_pointcloud = True
                     rospy.loginfo("VALID POINTCLOUD")
                 else:
@@ -794,7 +844,11 @@ class GraspExecutor:
             # Capture RGB and Depth
             rgb_image = self.rgb_image
             depth_image = self.depth_image
-            point_cloud = self.pcl_rosmsg
+
+            # Convert to O3D
+            # o3d_point_cloud = self.convertCloudFromRosToOpen3d(point_cloud)
+            # o3d.visualization.draw_geometries([o3d_point_cloud])
+
             rospy.sleep(1)
 
             self.test_publisher.publish(point_cloud)
@@ -817,7 +871,7 @@ class GraspExecutor:
 
             # Find best grasp from reading
             rospy.loginfo("Finding valid grasp...")
-            final_grasp_pose_offset, offset_plan, final_grasp_pose = self.find_best_grasp(self.agile_data, self.choose_random)
+            final_grasp_pose_offset, offset_plan, final_grasp_pose, robot_pose = self.find_best_grasp(self.agile_data, self.choose_random)
             # final_grasp_pose_offset, final_grasp_pose, offset_plan = self.find_best_cart_grasp(self.agile_data, self.choose_random)
             
             if final_grasp_pose:
@@ -835,7 +889,7 @@ class GraspExecutor:
                     # Determine ur5 pose -> final_grasp_pose_offset
                     
                     # Save data
-                    self.data_saver(self.object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, final_grasp_pose, final_grasp_pose_offset, success, stable_success)
+                    self.data_saver(self.object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, final_grasp_pose, robot_pose, success, stable_success)
 
                     # Close bag
                     self.bag.close()
@@ -893,6 +947,41 @@ class GraspExecutor:
             #
             # Also add an open at the end of the iteration, to make sure the gripper always ends open
             # Then sleep
+
+    def convertCloudFromRosToOpen3d(self, ros_cloud):
+        # Get cloud data from ros_cloud
+        field_names=[field.name for field in ros_cloud.fields]
+        cloud_data = list(pc2.read_points(ros_cloud, skip_nans=True, field_names = field_names))
+
+        # Check empty
+        open3d_cloud = o3d.geometry.PointCloud()
+        if len(cloud_data)==0:
+            print("Converting an empty cloud")
+            return None
+
+        # Set open3d_cloud
+        if "rgba" in field_names:
+            IDX_RGB_IN_FIELD=3 # x, y, z, rgb
+            
+            # Get xyz
+            xyz = [(x,y,z) for x,y,z,rgb in cloud_data ] # (why cannot put this line below rgb?)
+
+            # Get rgb
+            # Check whether int or float
+            if type(cloud_data[0][IDX_RGB_IN_FIELD])==float: # if float (from pcl::toROSMsg)
+                rgb = [convert_rgbFloat_to_tuple(rgb) for x,y,z,rgb in cloud_data ]
+            else:
+                rgb = [convert_rgbUint32_to_tuple(rgb) for x,y,z,rgb in cloud_data ]
+
+            # combine
+            open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
+            open3d_cloud.colors = o3d.utility.Vector3dVector(np.array(rgb)/255.0)
+        else:
+            xyz = [(x,y,z) for x,y,z in cloud_data ] # get xyz
+            open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
+
+        # return
+        return open3d_cloud
 
 
 if __name__ == '__main__':

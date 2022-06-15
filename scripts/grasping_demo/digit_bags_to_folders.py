@@ -15,6 +15,17 @@ from rosbag.bag import ROSBagUnindexedException
 import numpy as np
 import open3d as o3d
 
+import sensor_msgs.point_cloud2 as pc2
+
+from ctypes import * # convert float to uint32
+
+convert_rgbUint32_to_tuple = lambda rgb_uint32: (
+    (rgb_uint32 & 0x00ff0000)>>16, (rgb_uint32 & 0x0000ff00)>>8, (rgb_uint32 & 0x000000ff)
+)
+convert_rgbFloat_to_tuple = lambda rgb_float: convert_rgbUint32_to_tuple(
+    int(cast(pointer(c_float(rgb_float)), POINTER(c_uint32)).contents.value)
+)
+
 FILE_DIR = './'
 FOLDER_NAME = 'grasp_data_bags'
 BAG_DIR = 'grasp_data_bags/'
@@ -58,8 +69,11 @@ def main():
             # num_data_points += 1
                 cv2_rgb = bridge.imgmsg_to_cv2(rgb, desired_encoding="bgr8")
                 cv2_depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
+                o3d_point_cloud = convertCloudFromRosToOpen3d(point_cloud)
+                o3d.visualization.draw_geometries([o3d_point_cloud])
                 cv2.imshow("rgb", cv2_rgb)
                 cv2.imshow("depth", cv2_depth)
+                print("point cloud frame: ", point_cloud.header)
                 print("object_id: ", object_id)
                 print("trans: ", trans)
                 print("rot: ", rot)
@@ -71,6 +85,41 @@ def main():
                 cv2.waitKey(10000)
         else:
             print('ERROR: bag ' + bag_dir +' had mismatched data!')
+
+def convertCloudFromRosToOpen3d(ros_cloud):
+    # Get cloud data from ros_cloud
+    field_names=[field.name for field in ros_cloud.fields]
+    cloud_data = list(pc2.read_points(ros_cloud, skip_nans=True, field_names = field_names))
+
+    # Check empty
+    open3d_cloud = o3d.geometry.PointCloud()
+    if len(cloud_data)==0:
+        print("Converting an empty cloud")
+        return None
+
+    # Set open3d_cloud
+    if "rgba" in field_names:
+        IDX_RGB_IN_FIELD=3 # x, y, z, rgb
+        
+        # Get xyz
+        xyz = [(x,y,z) for x,y,z,rgb in cloud_data ] # (why cannot put this line below rgb?)
+
+        # Get rgb
+        # Check whether int or float
+        if type(cloud_data[0][IDX_RGB_IN_FIELD])==float: # if float (from pcl::toROSMsg)
+            rgb = [convert_rgbFloat_to_tuple(rgb) for x,y,z,rgb in cloud_data ]
+        else:
+            rgb = [convert_rgbUint32_to_tuple(rgb) for x,y,z,rgb in cloud_data ]
+
+        # combine
+        open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
+        open3d_cloud.colors = o3d.utility.Vector3dVector(np.array(rgb)/255.0)
+    else:
+        xyz = [(x,y,z) for x,y,z in cloud_data ] # get xyz
+        open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
+
+    # return
+    return open3d_cloud
 
 if __name__ == "__main__":
     if not os.path.exists(FILE_DIR + OUTPUT_DIR):
