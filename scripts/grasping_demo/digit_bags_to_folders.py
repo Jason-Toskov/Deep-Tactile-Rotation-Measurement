@@ -50,22 +50,24 @@ def main():
         point_cloud = [msg for _, msg, _ in bag.read_messages(topics=['point_cloud'])]
         trans = [msg for _, msg, _ in bag.read_messages(topics=['trans'])]
         rot = [msg for _, msg, _ in bag.read_messages(topics=['rot'])]
+        tf = [msg for _, msg, _ in bag.read_messages(topics=['tf'])]
+        tf_static = [msg for _, msg, _ in bag.read_messages(topics=['tf_static'])]
         cam_info = [msg for _, msg, _ in bag.read_messages(topics=['cam_info'])]
-        ee_pose = [msg for _, msg, _ in bag.read_messages(topics=['ee_pose'])]
+        grasp_pose = [msg for _, msg, _ in bag.read_messages(topics=['grasp_pose'])]
         robot_pose = [msg for _, msg, _ in bag.read_messages(topics=['robot_pose'])]
         success = [msg for _, msg, _ in bag.read_messages(topics=['success'])]
         stable_success = [msg for _, msg, _ in bag.read_messages(topics=['stable_success'])]
 
-        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(point_cloud),len(trans),len(rot),len(cam_info),len(robot_pose), len(ee_pose), len(success))
+        print(len(time_data),len(object_id),len(rgb_image),len(depth_image),len(point_cloud),len(trans),len(rot),len(tf),len(tf_static),len(cam_info),len(robot_pose), len(grasp_pose), len(success))
         
-        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(point_cloud) == len(trans) == len(rot) == len(cam_info) == len(robot_pose) == len(ee_pose) == len(success):
+        if len(time_data) == len(object_id) == len(rgb_image) == len(depth_image) == len(point_cloud) == len(trans) == len(rot) == len(tf) == len(tf_static) == len(cam_info) == len(robot_pose) == len(grasp_pose) == len(success):
             # #Folder naming convention is: <name>_<number of df>_<twist>_<gripperTwist>_<eeGroundRot>_<eeAirRot>_<gripperWidth>
             # folder = [FILE_DIR,OUTPUT_DIR,FOLDER_NAME,'_',num_data_points,'_',meta.gripperTwist,'_',meta.eeGroundRot,'_',meta.eeAirRot,'_',meta.gripperWidth]
             # folder = ''.join(list(map(str, folder)))
             # os.mkdir(folder)
 
             # digit_data_to_folder(folder, bridge, time_data, image_data, digit_data_0, digit_data_1, track_angle_srv)
-            for i, (time, object_id, rgb, depth, point_cloud, trans, rot, cam_info, ee, robot, success, stable_success) in enumerate(itertools.izip(time_data, object_id, rgb_image, depth_image, point_cloud, trans, rot, cam_info, ee_pose, robot_pose, success, stable_success)):
+            for i, (time, object_id, rgb, depth, point_cloud, trans, rot, tf, tf_static, cam_info, grasp, robot, success, stable_success) in enumerate(itertools.izip(time_data, object_id, rgb_image, depth_image, point_cloud, trans, rot, tf, tf_static, cam_info, grasp_pose, robot_pose, success, stable_success)):
             # num_data_points += 1
                 cv2_rgb = bridge.imgmsg_to_cv2(rgb, desired_encoding="bgr8")
                 cv2_depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
@@ -77,8 +79,10 @@ def main():
                 print("object_id: ", object_id)
                 print("trans: ", trans)
                 print("rot: ", rot)
+                print("tf: ", tf)
+                print("tf_static: ", tf_static)
                 print("cam_info: ", cam_info)
-                print("ee_pose: ", ee)
+                print("grasp_pose: ", grasp)
                 print("robot_pose: ", robot)
                 print("success: ", success)
                 print("stable success: ", stable_success)

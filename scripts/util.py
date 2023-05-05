@@ -23,7 +23,7 @@ def move_ur5(move_group, robot, disp_traj_pub, input, plan=None, no_confirm=Fals
         plan = move_group.plan()
 
     if no_confirm or check_valid_plan(disp_traj_pub, robot, plan):
-        move_group.execute(plan, wait=True)
+        attempted = move_group.execute(plan, wait=True)
     else: 
         print("Plan is invalid!")
         attempted = False

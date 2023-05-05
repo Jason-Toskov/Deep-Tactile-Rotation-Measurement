@@ -19,3 +19,13 @@ bags-27-1-2022.zip
 *box_csvs_true*
 *recorded_data_csvs/
 *recorded_data_bags*
+
+*data_bags/
+*.zip
+*.png
+*.avi
+*.csv
+*.jpeg
+.vscode/
+*.pt
+*.pyc
